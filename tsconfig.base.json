@@ -1,9 +1,16 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "module": "ESNext",
+    "module": "commonjs",
     "moduleResolution": "node",
     "lib": ["ES2020", "DOM"],
+    "composite": true,
+    "incremental": true,
+    "baseUrl": ".",
+    "paths": {
+      "@eraser/core": ["packages/core/src"],
+      "@eraser/viewer": ["packages/viewer/src"]
+    },
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,

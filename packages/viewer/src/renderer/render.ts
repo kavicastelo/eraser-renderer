@@ -3,6 +3,15 @@ import { ViewerRenderResult, ViewerRenderOptions } from '../types/viewer-types';
 import { renderNode } from './render-node';
 import { renderGroup } from './render-group';
 import { renderEdge } from './render-edge';
+import {GroupLayout, NodeLayout, RoutedEdge} from "@eraser/core";
+
+export interface LayoutResult {
+    nodes: Record<string, NodeLayout>;
+    groups: Record<string, GroupLayout>;
+    edges: RoutedEdge[];
+    width: number;
+    height: number;
+}
 
 export function renderToSVGElement(
     ast: any,
@@ -12,7 +21,7 @@ export function renderToSVGElement(
     const padding = options.padding ?? 32;
     const scale = options.scale ?? 1.0;
 
-    const layout = computeLayout(ast);
+    const layout: LayoutResult = computeLayout(ast);
 
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
 
@@ -21,7 +30,7 @@ export function renderToSVGElement(
     svg.setAttribute('viewBox', `0 0 ${layout.width + padding * 2} ${layout.height + padding * 2}`);
 
     // Groups first
-    layout.groups.forEach(group => {
+    Object.values(layout.groups).forEach(group => {
         svg.appendChild(renderGroup(group));
     });
 
@@ -31,7 +40,7 @@ export function renderToSVGElement(
     });
 
     // Nodes on top
-    layout.nodes.forEach(node => {
+    Object.values(layout.nodes).forEach(node => {
         svg.appendChild(renderNode(node));
     });
 

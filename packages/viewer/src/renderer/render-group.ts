@@ -1,4 +1,4 @@
-import { GroupLayout } from '@eraser-renderer/core';
+import { GroupLayout } from '@eraser/core';
 
 export function renderGroup(gNode: GroupLayout): SVGElement {
     const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');

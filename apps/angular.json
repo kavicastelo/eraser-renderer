@@ -10,35 +10,35 @@
           "style": "scss"
         }
       },
-      "root": "",
-      "sourceRoot": "src",
+      "root": "projects/playground",
+      "sourceRoot": "projects/playground/src",
       "prefix": "app",
       "architect": {
         "build": {
           "builder": "@angular-devkit/build-angular:application",
           "options": {
             "outputPath": "dist/playground",
-            "index": "src/index.html",
-            "browser": "src/main.ts",
+            "index": "projects/playground/src/index.html",
+            "browser": "projects/playground/src/main.ts",
             "polyfills": [
               "zone.js"
             ],
-            "tsConfig": "tsconfig.app.json",
+            "tsConfig": "projects/playground/tsconfig.app.json",
             "inlineStyleLanguage": "scss",
             "assets": [
               {
                 "glob": "**/*",
-                "input": "public"
+                "input": "projects/playground/public"
               }
             ],
             "styles": [
-              "src/styles.scss"
+              "projects/playground/src/styles.scss"
             ],
             "scripts": [],
-            "server": "src/main.server.ts",
+            "server": "projects/playground/src/main.server.ts",
             "outputMode": "server",
             "ssr": {
-              "entry": "src/server.ts"
+              "entry": "projects/playground/src/server.ts"
             }
           },
           "configurations": {
@@ -87,21 +87,57 @@
               "zone.js",
               "zone.js/testing"
             ],
-            "tsConfig": "tsconfig.spec.json",
+            "tsConfig": "projects/playground/tsconfig.spec.json",
             "inlineStyleLanguage": "scss",
             "assets": [
               {
                 "glob": "**/*",
-                "input": "public"
+                "input": "projects/playground/public"
               }
             ],
             "styles": [
-              "src/styles.scss"
+              "projects/playground/src/styles.scss"
             ],
             "scripts": []
           }
         }
       }
+    },
+    "diagram-viewer": {
+      "projectType": "library",
+      "root": "projects/diagram-viewer",
+      "sourceRoot": "projects/diagram-viewer/src",
+      "prefix": "lib",
+      "architect": {
+        "build": {
+          "builder": "@angular-devkit/build-angular:ng-packagr",
+          "options": {
+            "project": "projects/diagram-viewer/ng-package.json"
+          },
+          "configurations": {
+            "production": {
+              "tsConfig": "projects/diagram-viewer/tsconfig.lib.prod.json"
+            },
+            "development": {
+              "tsConfig": "projects/diagram-viewer/tsconfig.lib.json"
+            }
+          },
+          "defaultConfiguration": "production"
+        },
+        "test": {
+          "builder": "@angular-devkit/build-angular:karma",
+          "options": {
+            "tsConfig": "projects/diagram-viewer/tsconfig.spec.json",
+            "polyfills": [
+              "zone.js",
+              "zone.js/testing"
+            ]
+          }
+        }
+      }
     }
+  },
+  "cli": {
+    "analytics": "e58f186d-c29d-4b3b-80c2-2272535e4809"
   }
 }

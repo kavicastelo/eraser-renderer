@@ -1,5 +1,5 @@
 import { computeDiagramLayout } from "../layout-engine";
-import { DiagramAST } from "../../ast/ast-types";
+import { DiagramAST } from "@eraser/core";
 
 describe("computeDiagramLayout", () => {
 

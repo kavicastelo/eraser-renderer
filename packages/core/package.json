@@ -1,16 +1,11 @@
 {
-  "name": "@eraser-renderer/core",
-  "version": "0.1.0",
+  "name": "@eraser/core",
+  "version": "0.0.1",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "test": "jest --passWithNoTests --runInBand"
-  },
-  "devDependencies": {
-    "ts-jest": "^29.4.5",
-    "jest": "^29.7.0",
-    "@types/jest": "^29.5.3",
-    "typescript": "^5.6.6"
+    "build": "tsc -b",
+    "test": "jest --passWithNoTests --runInBand",
+    "watch": "tsc -b --watch"
   }
 }

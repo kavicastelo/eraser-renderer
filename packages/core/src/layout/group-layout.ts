@@ -1,5 +1,5 @@
-import {ASTGroup, ASTNode} from "../ast/ast-types";
-import {GroupLayout, NodeLayout, Rect} from "../types/layout-types";
+import {ASTGroup, ASTNode} from "@eraser/core";
+import {GroupLayout, NodeLayout, Rect} from "@eraser/core";
 
 const PADDING = 40;
 

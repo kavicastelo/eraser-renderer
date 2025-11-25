@@ -1,4 +1,4 @@
-import { RoutedEdge } from '@eraser-renderer/core';
+import { RoutedEdge } from '@eraser/core';
 
 export function renderEdge(edge: RoutedEdge): SVGElement {
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');

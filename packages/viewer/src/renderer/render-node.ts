@@ -1,4 +1,4 @@
-import { NodeLayout } from '@eraser-renderer/core';
+import { NodeLayout } from '@eraser/core';
 
 export function renderNode(node: NodeLayout): SVGElement {
     const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
