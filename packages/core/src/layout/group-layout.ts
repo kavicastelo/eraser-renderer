@@ -1,5 +1,5 @@
-import { ASTGroup } from "../ast/ast-types";
-import { GroupLayout, NodeLayout } from "../types/layout-types";
+import {ASTGroup, ASTNode} from "../ast/ast-types";
+import {GroupLayout, NodeLayout, Rect} from "../types/layout-types";
 
 const PADDING = 40;
 
@@ -11,11 +11,18 @@ export function computeGroupLayout(
     const out: Record<string, GroupLayout> = {};
 
     for (const g of groups) {
-        // naive auto-bounds: union of children
-        const childBounds = g.children
-            .filter(c => c.kind === "entity")
+
+        const entityChildren = g.children.filter(
+            (c): c is ASTNode => c.kind === 'entity'
+        );
+
+        const childBounds = entityChildren
             .map(c => nodeLayouts[c.id]?.bounds)
-            .filter(Boolean);
+            .filter((b): b is Rect => Boolean(b));
+
+        if (childBounds.length === 0) {
+            continue;
+        }
 
         const minX = Math.min(...childBounds.map(b => b.x)) - 32;
         const minY = Math.min(...childBounds.map(b => b.y)) - 32;
@@ -25,9 +32,7 @@ export function computeGroupLayout(
         out[g.name] = {
             name: g.name,
             ast: g,
-            children: g.children
-                .filter(c => c.kind === "entity")
-                .map(c => (c as any).id),
+            children: entityChildren.map(c => c.id),
             padding: PADDING,
             bounds: {
                 x: minX,
@@ -40,4 +45,3 @@ export function computeGroupLayout(
 
     return out;
 }
-

@@ -1,0 +1,15 @@
+{
+  "name": "@eraser-renderer/viewer",
+  "version": "0.1.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "dependencies": {
+    "@eraser-renderer/core": "0.1.0"
+  }
+}

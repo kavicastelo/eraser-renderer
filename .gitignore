@@ -4,3 +4,5 @@ apps/dist
 apps/node_modules/
 node_modules/
 packages/core/dist
+/apps/playground/.vscode/
+/apps/playground/node_modules/
