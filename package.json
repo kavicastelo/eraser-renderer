@@ -7,9 +7,8 @@
     "apps/*"
   ],
   "scripts": {
-    "build": "npm run build --workspaces",
-    "test": "npm run test --workspaces",
-    "test:core": "pnpm -w -F @eraser-renderer/core test"
+    "build": "pnpm -w --filter \"./packages/*\" run build",
+    "test": "pnpm -w --filter \"./packages/*\" run test"
   },
   "devDependencies": {
     "typescript": "^5.6.3",
