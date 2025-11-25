@@ -1,5 +1,5 @@
-import { parseEraserDSL } from '../../eraser-unified-parser';
-import { DiagramAST, EntityNode, GroupNode, EdgeNode, DiagramType, EdgeKind } from '../../eraser-unified-parser'; // Assuming types are exported
+import { parseEraserDSL } from '../parser';
+import { DiagramAST, EntityNode, GroupNode, EdgeNode, DiagramType, EdgeKind } from '../../ast/ast-types';
 
 // Helper to cast nodes for easier assertion
 const asEntity = (node: any): EntityNode => node as EntityNode;

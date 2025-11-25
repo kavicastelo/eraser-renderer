@@ -1,189 +1,18 @@
-// Unified recursive-descent parser for Eraser-style DSL -> AST
-// Usable in Angular/Node. No external deps.
+import { tokenize } from "../lexer/tokenize";
+import { Token } from "../lexer/token-types";
+import {
+    DiagramAST,
+    DiagramType,
+    BlockNode,
+    EntityNode,
+    GroupNode,
+    FieldDef,
+    EdgeNode,
+    TokenType
+} from "../types-bridge";
 
-/////////////////////////////////////////
-// AST Types
-/////////////////////////////////////////
-
-export type DiagramType = 'flow' | 'cloud' | 'er' | 'sequence' | 'bpmn' | 'unknown';
-
-export interface DiagramAST {
-    diagramType: DiagramType;
-    metadata: Record<string, string | boolean>;
-    rootBlocks: BlockNode[];     // top-level groups and nodes
-    edges: EdgeNode[];           // all parsed edges (chains expanded)
-    rawLineCount: number;
-}
-
-export type BlockNode = GroupNode | EntityNode;
-
-export interface GroupNode {
-    kind: 'group';
-    name: string;
-    children: BlockNode[];
-    attrs?: Record<string, string>;
-}
-
-export interface EntityNode {
-    kind: 'entity';
-    id: string;
-    attrs: Record<string, string>;
-    // For ER-like nodes that include fields inside { ... }
-    fields?: FieldDef[];
-    raw?: string;
-}
-
-export interface FieldDef {
-    name: string;
-    type?: string;
-    constraints?: string[]; // pk, fk, nullable, etc.
-    raw?: string;
-}
-
-export type EdgeKind = 'directed' | 'undirected' | 'bidirectional';
-
-export interface EdgeNode {
-    from: string;
-    to: string;
-    kind: EdgeKind;
-    label?: string;
-    raw?: string;
-}
-
-/////////////////////////////////////////
-// Tokenizer
-/////////////////////////////////////////
-
-type TokenType =
-    | 'IDENT' | 'NUMBER' | 'STRING'
-    | 'LBRACE' | 'RBRACE' | 'LBRACK' | 'RBRACK' | 'COLON' | 'COMMA'
-    | 'GT' | 'LT' | 'GT_LT' | 'ARROW' | 'DASH' | 'NEWLINE' | 'EOF'
-    | 'OTHER';
-
-interface Token {
-    type: TokenType;
-    text: string;
-    line: number;
-    col: number;
-}
-
-function isAlphaNumUnderscore(ch: string) {
-    // Includes dash and dot for identifiers like "api-gateway" or "schema.table"
-    return /[A-Za-z0-9_\-\.]/.test(ch);
-}
-
-function tokenize(input: string): Token[] {
-    const tokens: Token[] = [];
-    const len = input.length;
-    let i = 0;
-    let line = 1;
-    let col = 1;
-
-    const push = (type: TokenType, text: string) => tokens.push({ type, text, line, col });
-
-    while (i < len) {
-        const ch = input[i];
-
-        // handle newlines
-        if (ch === '\n') {
-            push('NEWLINE', '\n');
-            i++; line++; col = 1;
-            continue;
-        }
-
-        // whitespace
-        if (/\s/.test(ch)) {
-            i++; col++;
-            continue;
-        }
-
-        // comment line starting with //
-        if (ch === '/' && input[i + 1] === '/') {
-            let j = i;
-            while (j < len && input[j] !== '\n') j++;
-            const txt = input.slice(i, j);
-            push('OTHER', txt);
-            i = j;
-            continue;
-        }
-
-        // 1. Check Arrows specifically (Must be before IDENT/AlphaNum checks because they start with - or <)
-        if (ch === '-') {
-            if (input[i+1] === '-' && input[i+2] === '>') {
-                push('ARROW', '-->'); i += 3; col += 3; continue;
-            }
-            if (input[i+1] === '>') {
-                push('ARROW', '->'); i += 2; col += 2; continue;
-            }
-            // Note: Single dash is NOT handled here.
-            // It falls through to isAlphaNumUnderscore to allow "kebab-case-identifiers"
-        }
-
-        if (ch === '<') {
-            if (input[i+1] === '>' ) { push('GT_LT', '<>'); i += 2; col += 2; continue; }
-            push('LT', '<'); i++; col++; continue;
-        }
-        if (ch === '>') { push('GT', '>'); i++; col++; continue; }
-
-        // 2. Strings
-        if (ch === '"' || ch === "'") {
-            const quote = ch;
-            let j = i + 1;
-            let escaped = false;
-            let acc = '';
-            while (j < len) {
-                const c = input[j];
-                if (c === '\\' && !escaped) { escaped = true; j++; continue; }
-                if (c === quote && !escaped) { break; }
-                acc += c;
-                escaped = false;
-                j++;
-            }
-            const hasClose = input[j] === quote;
-            push('STRING', acc);
-            j += hasClose ? 1 : 0;
-            const consumed = j - i;
-            i = j; col += consumed;
-            continue;
-        }
-
-        // 3. Identifiers / Numbers (includes single dashes inside)
-        if (isAlphaNumUnderscore(ch)) {
-            let j = i;
-            let acc = '';
-            while (j < len && isAlphaNumUnderscore(input[j])) {
-                acc += input[j];
-                j++;
-            }
-            push('IDENT', acc);
-            const consumed = j - i;
-            i = j; col += consumed;
-            continue;
-        }
-
-        // 4. Punctuation
-        if (ch === '{') { push('LBRACE', '{'); i++; col++; continue; }
-        if (ch === '}') { push('RBRACE', '}'); i++; col++; continue; }
-        if (ch === '[') { push('LBRACK', '['); i++; col++; continue; }
-        if (ch === ']') { push('RBRACK', ']'); i++; col++; continue; }
-        if (ch === ':') { push('COLON', ':'); i++; col++; continue; }
-        if (ch === ',') { push('COMMA', ','); i++; col++; continue; }
-
-        // Fallback for single dash not part of ident (e.g. " - " spacing)
-        if (ch === '-') { push('DASH', '-'); i++; col++; continue; }
-
-        // anything else
-        push('OTHER', ch);
-        i++; col++;
-    }
-
-    push('EOF', '<EOF>');
-    return tokens;
-}
-
-/////////////////////////////////////////
-// Parser (recursive-descent)
-/////////////////////////////////////////
+// actually re-declare TokenType locally for runtime checks; TokenType used in earlier parser was a type alias
+type _TokenType = Token['type'];
 
 class Parser {
     tokens: Token[];
@@ -196,7 +25,6 @@ class Parser {
         if (diagHint) this.diagramType = diagHint;
     }
 
-    // FIXED: Safety check for empty token array
     peek(n = 0): Token {
         if (this.tokens.length === 0) return { type: 'EOF', text: '', line: 0, col: 0 };
         return this.tokens[this.pos + n] ?? this.tokens[this.tokens.length - 1];
@@ -208,7 +36,7 @@ class Parser {
         return t;
     }
 
-    expect(type: TokenType, consume = true): Token | null {
+    expect(type: Token['type'], consume = true): Token | null {
         const t = this.peek();
         if (t.type === type) {
             if (consume) this.next();
@@ -217,7 +45,7 @@ class Parser {
         return null;
     }
 
-    consumeIf(type: TokenType): Token | null {
+    consumeIf(type: Token['type']): Token | null {
         const t = this.peek();
         if (t.type === type) { this.next(); return t; }
         return null;
@@ -242,8 +70,6 @@ class Parser {
 
                 // Group start: Name {
                 if (next1 && next1.type === 'LBRACE') {
-                    // Check if this is a Group OR an Entity with fields.
-                    // Heuristic: If it looks like an Entity (fields inside), parse as Entity.
                     if (this.looksLikeEntityDef()) {
                         const node = this.parseEntityOrNode();
                         rootBlocks.push(node);
@@ -261,7 +87,7 @@ class Parser {
                     continue;
                 }
 
-                // Metadata or Edge
+                // Edge or metadata
                 const isEdgeLine = this.looksLikeEdgeLine();
                 if (isEdgeLine) {
                     const parsedEdges = this.parseEdgeLine();
@@ -269,28 +95,27 @@ class Parser {
                     continue;
                 }
 
-                // Metadata
+                // Metadata line
                 const metaPair = this.parseMetadataLine();
                 if (metaPair) {
                     metadata[metaPair.key] = metaPair.value;
                     continue;
                 }
 
-                // Lone identifier
+                // Lone identifier node
                 const loneIdent = this.next();
                 while (!this.eof() && this.peek().type !== 'NEWLINE') this.next();
                 rootBlocks.push({
                     kind: 'entity',
                     id: loneIdent.text,
                     attrs: {},
-                    raw: loneIdent.text,
+                    raw: loneIdent.text
                 } as EntityNode);
                 continue;
             }
 
             if (t.type === 'EOF') break;
 
-            // Edges starting without ident (rare but possible with weird formatting)
             if (this.looksLikeEdgeLine()) {
                 const parsed = this.parseEdgeLine();
                 edges.push(...parsed);
@@ -305,35 +130,25 @@ class Parser {
             metadata,
             rootBlocks,
             edges,
-            rawLineCount: lineCount,
+            rawLineCount: lineCount
         };
     }
 
-    // Heuristic: Peek inside "Ident { ... }" to see if it contains "field type" patterns
     looksLikeEntityDef(): boolean {
-        // We are at IDENT, peek(1) is LBRACE. Look at peek(2) onwards.
         let i = 2;
-        // Skip newlines/comments inside the brace
         while(true) {
             const t = this.peek(i);
             if (t.type === 'EOF') return false;
-            if (t.type === 'RBRACE') return false; // Empty block -> treat as Group or empty Entity (default to Group)
+            if (t.type === 'RBRACE') return false;
             if (t.type === 'NEWLINE' || t.type === 'OTHER') { i++; continue; }
             break;
         }
 
         const t1 = this.peek(i);
         const t2 = this.peek(i+1);
-
-        // If we see: IDENT IDENT (name type), it's likely an Entity field
         if (t1.type === 'IDENT' && t2.type === 'IDENT') return true;
-        // If we see: IDENT STRING (name "type"), possible
         if (t1.type === 'IDENT' && t2.type === 'STRING') return true;
-
-        // If we see: IDENT [ (Node with attrs) or IDENT { (Nested group), it's a Group
         if (t1.type === 'IDENT' && (t2.type === 'LBRACK' || t2.type === 'LBRACE')) return false;
-
-        // Default
         return false;
     }
 
@@ -355,8 +170,6 @@ class Parser {
         const pieces: string[] = [];
         while (!this.eof() && this.peek().type !== 'NEWLINE') {
             const t = this.next();
-            // Handle quoted strings explicitly to remove quotes if needed,
-            // but here we keep raw text usually.
             pieces.push(t.text);
         }
         if (this.peek().type === 'NEWLINE') this.next();
@@ -374,7 +187,6 @@ class Parser {
         while (!this.eof() && this.peek().type !== 'RBRACE') {
             if (this.peek().type === 'NEWLINE' || this.peek().type === 'OTHER') { this.next(); continue; }
 
-            // FIXED: Distinguish nested Group from Entity
             if (this.peek().type === 'IDENT' && this.peek(1).type === 'LBRACE') {
                 if (this.looksLikeEntityDef()) {
                     children.push(this.parseEntityOrNode());
@@ -390,21 +202,20 @@ class Parser {
                     children.push(this.parseEntityOrNode());
                     continue;
                 } else {
-                    // Simple node: "NodeName"
                     const idTok = this.next();
                     while (!this.eof() && this.peek().type !== 'NEWLINE') this.next();
                     children.push({
                         kind: 'entity',
                         id: idTok.text,
                         attrs: {},
-                        raw: idTok.text,
+                        raw: idTok.text
                     } as EntityNode);
                     continue;
                 }
             }
 
             if (this.looksLikeEdgeLine()) {
-                this.parseEdgeLine(); // Consume but discard in this version
+                this.parseEdgeLine(); // consume
                 continue;
             }
 
@@ -453,9 +264,7 @@ class Parser {
                     }
 
                     const constraintText = remaining.join(' ').trim();
-                    if (constraintText.length > 0) {
-                        constraints.push(...constraintText.split(/\s+/));
-                    }
+                    if (constraintText.length > 0) { constraints.push(...constraintText.split(/\s+/)); }
 
                     if (this.peek().type === 'NEWLINE') this.next();
 
@@ -463,7 +272,7 @@ class Parser {
                         name: nameTok.text,
                         type: typeTok ? typeTok.text : undefined,
                         constraints,
-                        raw: `${nameTok.text} ${typeTok ? typeTok.text : ''} ${constraintText}`.trim(),
+                        raw: `${nameTok.text} ${typeTok ? typeTok.text : ''} ${constraintText}`.trim()
                     });
                     continue;
                 }
@@ -474,16 +283,10 @@ class Parser {
 
         if (this.peek().type === 'NEWLINE') this.next();
 
-        return {
-            kind: 'entity',
-            id,
-            attrs,
-            fields,
-            raw: id,
-        };
+        return { kind: 'entity', id, attrs, fields, raw: id };
     }
 
-    collectUntil(endType: TokenType): Token[] {
+    collectUntil(endType: Token['type']): Token[] {
         const acc: Token[] = [];
         while (!this.eof() && this.peek().type !== endType) {
             acc.push(this.next());
@@ -499,13 +302,11 @@ class Parser {
             while (i < n && (tokens[i].type === 'NEWLINE' || tokens[i].type === 'OTHER')) i++;
             if (i >= n) break;
 
-            // FIXED: Ensure we have a key IDENT
             const k = tokens[i];
             if (k.type !== 'IDENT') { i++; continue; }
 
             const key = k.text;
             i++;
-
             while (i < n && tokens[i].type !== 'COLON') i++;
             if (i < n && tokens[i].type === 'COLON') i++;
 
@@ -531,18 +332,13 @@ class Parser {
         if (this.peek().type === 'NEWLINE') this.next();
 
         const parts: Array<{ kind: 'node' | 'connector' | 'colon' | 'other'; text: string }> = [];
-
-        // FIXED: Handle attributes in edge definitions (e.g. A [color:red] > B)
-        // We iterate manually to skip over bracketed content so they don't look like nodes
         let i = 0;
-        while(i < lineTokens.length) {
+        while (i < lineTokens.length) {
             const t = lineTokens[i];
             if (t.type === 'LBRACK') {
-                // Consume until RBRACK and ignore (or store as raw metadata later if improved)
-                // For now: prevent attributes from becoming nodes in the edge chain
                 i++;
-                while(i < lineTokens.length && lineTokens[i].type !== 'RBRACK') i++;
-                i++; // skip RBRACK
+                while (i < lineTokens.length && lineTokens[i].type !== 'RBRACK') i++;
+                i++;
                 continue;
             }
 
@@ -550,7 +346,7 @@ class Parser {
             else if (t.type === 'GT_LT') parts.push({ kind: 'connector', text: '<>' });
             else if (t.type === 'GT') parts.push({ kind: 'connector', text: '>' });
             else if (t.type === 'ARROW') parts.push({ kind: 'connector', text: t.text });
-            else if (t.type === 'COLON') { parts.push({ kind: 'colon', text: ':' }); }
+            else if (t.type === 'COLON') parts.push({ kind: 'colon', text: ':' });
             else if (t.type === 'COMMA') parts.push({ kind: 'other', text: ',' });
             else if (t.type === 'STRING') parts.push({ kind: 'other', text: `"${t.text}"` });
             else if (t.type === 'OTHER') parts.push({ kind: 'other', text: t.text });
@@ -607,8 +403,8 @@ class Parser {
                 const next = chain[cIdx + 1];
                 if (!next || !('nodes' in next)) { cIdx += 1; continue; }
                 const nextNodes = next.nodes;
-                let kind: EdgeKind = 'directed';
-                if (connector === '<>' ) kind = 'bidirectional';
+                let kind: EdgeNode['kind'] = 'directed';
+                if (connector === '<>') kind = 'bidirectional';
                 else kind = 'directed';
 
                 const froms = lastNodes ?? [];
@@ -633,10 +429,6 @@ class Parser {
         return edges;
     }
 }
-
-/////////////////////////////////////////
-// Public parse function
-/////////////////////////////////////////
 
 export function parseEraserDSL(input: string, diagHint?: DiagramType): DiagramAST {
     const toks = tokenize(input);
