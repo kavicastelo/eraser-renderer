@@ -3,13 +3,14 @@ export type DiagramType = 'flow' | 'cloud' | 'er' | 'sequence' | 'bpmn' | 'unkno
 export interface DiagramAST {
     diagramType: DiagramType;
     metadata: Record<string, string | boolean>;
-    rootBlocks: BlockNode[];     // top-level groups and nodes
-    edges: EdgeNode[];           // all parsed edges (chains expanded)
+    rootBlocks: BlockNode[];
+    edges: EdgeNode[];
     rawLineCount: number;
 }
 
 export type BlockNode = GroupNode | EntityNode;
 
+// -------- Groups --------
 export interface GroupNode {
     kind: 'group';
     name: string;
@@ -17,6 +18,7 @@ export interface GroupNode {
     attrs?: Record<string, string>;
 }
 
+// -------- Entities --------
 export interface EntityNode {
     kind: 'entity';
     id: string;
@@ -28,10 +30,11 @@ export interface EntityNode {
 export interface FieldDef {
     name: string;
     type?: string;
-    constraints?: string[]; // pk, fk, nullable, etc.
+    constraints?: string[];
     raw?: string;
 }
 
+// -------- Edges --------
 export type EdgeKind = 'directed' | 'undirected' | 'bidirectional';
 
 export interface EdgeNode {
@@ -40,4 +43,19 @@ export interface EdgeNode {
     kind: EdgeKind;
     label?: string;
     raw?: string;
+}
+
+// ============================
+// Layout-friendly aliases
+// ============================
+
+export type ASTNode = EntityNode;      // Nodes that appear visually as boxes
+export type ASTGroup = GroupNode;      // Groups of nodes
+export type ASTEdge = EdgeNode;        // Routed edges
+
+// Optional helper if needed:
+export interface FlattenedAST {
+    nodes: ASTNode[];
+    groups: ASTGroup[];
+    edges: ASTEdge[];
 }
