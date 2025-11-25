@@ -1,4 +1,4 @@
-import { DiagramAST } from '@eraser-renderer/core';
+import { DiagramAST } from '@eraser/core';
 
 export interface ViewerRenderOptions {
     scale?: number;

@@ -1,20 +1,21 @@
 {
-  "name": "eraser-renderer",
+  "name": "eraser",
   "private": true,
-  "version": "0.1.0",
-  "workspaces": [
-    "packages/*",
-    "apps/*"
-  ],
+  "version": "0.0.1",
   "scripts": {
-    "build": "pnpm -w --filter \"./packages/*\" run build",
-    "test": "pnpm -w --filter \"./packages/*\" run test"
+    "start": "concurrently -n PACKAGES,ANGULAR \"pnpm dev\" \"cd apps/playground && pnpm ng serve\"",
+    "test": "pnpm -r --filter \"./packages/*\" run test",
+    "build": "pnpm -r --filter \"./packages/*\" run build",
+    "watch": "pnpm -r --parallel --filter \"./packages/*\" run watch",
+    "dev": "pnpm watch"
   },
   "devDependencies": {
     "typescript": "^5.6.3",
     "ts-node": "^10.9.1",
     "jest": "^29.7.0",
+    "ts-jest": "^29.4.5",
     "@types/jest": "^29.5.5",
-    "pnpm": "10.0.0"
+    "pnpm": "10.0.0",
+    "concurrently": "^9.0.0"
   }
 }

@@ -1,15 +1,14 @@
 {
-  "name": "@eraser-renderer/viewer",
-  "version": "0.1.0",
+  "name": "@eraser/viewer",
+  "version": "0.0.1",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "exports": {
-    ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
-    }
-  },
   "dependencies": {
-    "@eraser-renderer/core": "0.1.0"
+    "@eraser/core": "workspace:*"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "test": "jest --passWithNoTests --runInBand",
+    "watch": "tsc -b --watch"
   }
 }

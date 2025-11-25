@@ -6,11 +6,11 @@ import {
     NodeLayout,
     GroupLayout,
     RoutedEdge,
-} from '@eraser-renderer/core';
+} from '@eraser/core';
 
-import { computeNodeLayout } from '@eraser-renderer/core/dist/layout/node-layout';
-import { computeGroupLayout } from '@eraser-renderer/core/dist/layout/group-layout';
-import { computeEdgeRouting } from '@eraser-renderer/core/dist/layout/edge-routing';
+import { computeNodeLayout } from '@eraser/core/dist/layout/node-layout';
+import { computeGroupLayout } from '@eraser/core/dist/layout/group-layout';
+import { computeEdgeRouting } from '@eraser/core/dist/layout/edge-routing';
 
 export interface LayoutResult {
     nodes: Record<string, NodeLayout>;

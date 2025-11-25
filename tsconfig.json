@@ -1,9 +1,8 @@
 {
   "files": [],
   "references": [
-    { "path": "./packages/core/**/*" },
-    { "path": "./packages/viewer/**/*" },
-    { "path": "./packages/embed/**/*" },
-    { "path": "./apps/playground/**/*" }
+    { "path": "./packages/core" },
+    { "path": "./packages/viewer" },
+    { "path": "./apps/playground" }
   ]
 }

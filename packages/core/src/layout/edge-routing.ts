@@ -1,5 +1,5 @@
-import { ASTEdge, ASTGroup } from "../ast/ast-types";
-import { RoutedEdge, NodeLayout, GroupLayout } from "../types/layout-types";
+import { ASTEdge, ASTGroup } from "@eraser/core";
+import { RoutedEdge, NodeLayout, GroupLayout } from "@eraser/core";
 
 
 export function computeEdgeRouting(

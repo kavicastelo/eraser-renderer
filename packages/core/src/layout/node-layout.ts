@@ -1,5 +1,5 @@
-import { ASTNode } from "../ast/ast-types";
-import { NodeLayout } from "../types/layout-types";
+import { ASTNode } from "@eraser/core";
+import { NodeLayout } from "@eraser/core";
 
 const NODE_WIDTH = 160;
 const NODE_HEIGHT = 60;
