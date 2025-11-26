@@ -1,13 +1,33 @@
-<h2 style="margin:16px 0;">Diagram Viewer Playground</h2>
+<div class="editor-container">
+  <!-- Editor Panel -->
+  <div class="editor-panel">
+    <h3>Eraser DSL</h3>
+    <div #editor class="codemirror-host"></div>
+  </div>
 
-<diagram-viewer
-  [code]="codeText"
-  (loaded)="onLoaded($event)"
-  style="width:100%; height:80vh; border:1px solid #333; border-radius:8px; display:block;"
->
-</diagram-viewer>
+  <!-- Viewer Panel -->
+  <div class="viewer-panel">
+    <div class="toolbar">
+      <button (click)="fitToView()" title="Fit to view">Fit</button>
+      <button (click)="resetZoom()" title="Reset zoom">100%</button>
+      <button (click)="toggleTheme()" title="Toggle dark mode">
+        <span [innerHTML]="isDark ? 'Light' : 'Dark'"></span>
+      </button>
+      <button (click)="exportSVG()" title="Export SVG">SVG</button>
+      <button (click)="exportPNG()" title="Export PNG">PNG</button>
+    </div>
 
-<div style="margin-top:16px; font-size:14px;">
-  <strong>Loaded event:</strong>
-  <pre>{{ lastEvent | json }}</pre>
+    <diagram-viewer
+      [code]="codeText"
+      [theme]="isDark ? 'dark' : 'light'"
+      [fitOnLoad]="true"
+      (loaded)="onLoaded($event)"
+      (zoomChange)="onZoom($event)"
+      #viewer
+    ></diagram-viewer>
+
+    <div *ngIf="error" class="error-banner">
+      <strong>Error:</strong> {{ error }}
+    </div>
+  </div>
 </div>

@@ -1,0 +1,91 @@
+:host {
+  display: block;
+  height: 100vh;
+  font-family: system-ui, sans-serif;
+}
+
+.editor-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  height: 100%;
+  background: var(--bg, #f5f5f5);
+  color: var(--text, #333);
+}
+
+.editor-panel, .viewer-panel {
+  padding: 16px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.editor-panel h3, .viewer-panel h3 {
+  margin: 0 0 12px 0;
+  font-size: 18px;
+}
+
+.codemirror-host {
+  flex: 1;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  overflow: hidden;
+  background: white;
+}
+
+.diagram-host {
+  flex: 1;
+  background: var(--viewer-bg, white);
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+  border: 1px solid #ddd;
+}
+
+.toolbar {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 100;
+  background: rgba(255,255,255,0.9);
+  backdrop-filter: blur(8px);
+  padding: 8px;
+  border-radius: 8px;
+  display: flex;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  font-size: 14px;
+}
+
+.toolbar button {
+  padding: 6px 10px;
+  border: none;
+  background: #0066ff;
+  color: white;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.toolbar button:hover {
+  background: #0052cc;
+}
+
+.error-banner {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  right: 16px;
+  background: #ffebee;
+  color: #c62828;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #ffcdd2;
+  z-index: 100;
+}
+
+/* Dark mode */
+body.dark {
+  --bg: #1e1e1e;
+  --text: #eee;
+  --viewer-bg: #2d2d2d;
+}
