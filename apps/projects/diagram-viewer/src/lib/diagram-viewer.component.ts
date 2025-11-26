@@ -13,12 +13,8 @@ import {
   NgZone
 } from '@angular/core';
 
-import type {
-  DiagramAST
-} from '@eraser/core';
-import { parseEraserDSL, computeDiagramLayout } from '@eraser/core';
-
-import { renderToSVGElement } from '@eraser/viewer';
+import {parseEraserDSL, DiagramAST} from '@eraser/core';
+import {computeDiagramLayout, renderToSVGElement} from '@eraser/viewer';
 import {NgIf} from '@angular/common';
 
 /**
@@ -139,13 +135,13 @@ export class DiagramViewerComponent implements OnChanges, AfterViewInit {
         const layout = computeDiagramLayout(ast);
 
         // store bounds for fitToView
-        if (!layout?.bounds) {
+        if (!layout?.width || !layout?.height) {
           throw new Error("Layout has no bounds — AST incomplete or invalid.");
         }
 
         this.lastBounds = {
-          width: layout.bounds.width,
-          height: layout.bounds.height
+          width: layout.width,
+          height: layout.height
         };
 
         // 3) render to an SVG element (pure TS viewer)

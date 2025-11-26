@@ -1,17 +1,9 @@
-import { computeLayout } from '../layout/layout-engine';
 import { ViewerRenderResult, ViewerRenderOptions } from '../types/viewer-types';
 import { renderNode } from './render-node';
 import { renderGroup } from './render-group';
 import { renderEdge } from './render-edge';
-import {DiagramAST, GroupLayout, NodeLayout, RoutedEdge} from "@eraser/core";
-
-export interface LayoutResult {
-    nodes: Record<string, NodeLayout>;
-    groups: Record<string, GroupLayout>;
-    edges: RoutedEdge[];
-    width: number;
-    height: number;
-}
+import { DiagramAST, LayoutResult } from "@eraser/core";
+import {computeDiagramLayout} from "../layout/dagre-layout";
 
 export function renderToSVGElement(
     ast: DiagramAST,
@@ -21,7 +13,7 @@ export function renderToSVGElement(
     const padding = options.padding ?? 32;
     const scale = options.scale ?? 1.0;
 
-    const layout: LayoutResult = computeLayout(ast);
+    const layout: LayoutResult = computeDiagramLayout(ast);
 
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
 
