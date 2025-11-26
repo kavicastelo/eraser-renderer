@@ -6,7 +6,8 @@ import { DiagramLayout, Rect } from "../types/layout-types";
 
 export function computeDiagramLayout(ast: DiagramAST): DiagramLayout {
     // 1. Compute node layout (raw entities only)
-    const entities = ast.rootBlocks.filter(b => b.kind === "entity") as any[];
+    const normalized = normalizeAST(ast);
+    const entities = normalized.rootBlocks.filter(b => b.kind === "entity") as any[];
     const nodeLayouts = computeNodeLayout(entities);
 
     // 2. Compute group layout (if any)
@@ -56,4 +57,27 @@ function computeDiagramBounds(
         width: maxX - minX,
         height: maxY - minY
     };
+}
+
+function normalizeAST(ast: DiagramAST): DiagramAST {
+    const defined = new Set(ast.rootBlocks.filter(b => b.kind === "entity").map(b => b.id));
+    const missing: string[] = [];
+
+    for (const e of ast.edges) {
+        if (!defined.has(e.from)) missing.push(e.from);
+        if (!defined.has(e.to)) missing.push(e.to);
+    }
+
+    if (missing.length > 0) {
+        for (const id of missing) {
+            ast.rootBlocks.push({
+                kind: "entity",
+                id,
+                attrs: {},
+                fields: []
+            });
+        }
+    }
+
+    return ast;
 }

@@ -67,8 +67,19 @@ class Parser {
 
             if (t.type === 'IDENT') {
                 const next1 = this.peek(1);
+                const next2 = this.peek(2);
 
-                // Group start: Name {
+                // Special-case: "group NAME {"
+                if (t.text.toLowerCase() === 'group' && next1 && next1.type === 'IDENT' && next2 && next2.type === 'LBRACE') {
+                    // consume 'group' and the name, then parse group body
+                    this.next(); // consume 'group'
+                    const nameTok = this.expect('IDENT');
+                    const group = this.parseGroup(nameTok ? nameTok.text : undefined);
+                    rootBlocks.push(group);
+                    continue;
+                }
+
+                // Group start: Name {   (e.g. "Deployments { ... }")
                 if (next1 && next1.type === 'LBRACE') {
                     if (this.looksLikeEntityDef()) {
                         const node = this.parseEntityOrNode();
@@ -158,7 +169,8 @@ class Parser {
             const t = this.peek(i);
             if (!t || t.type === 'EOF') return false;
             if (t.type === 'NEWLINE') break;
-            if (t.type === 'GT' || t.type === 'GT_LT' || t.type === 'ARROW') return true;
+            // Detect any connector tokens: >, <>, ->, --\>, or single dash
+            if (t.type === 'GT' || t.type === 'GT_LT' || t.type === 'ARROW' || t.type === 'DASH') return true;
             i++;
         }
         return false;
@@ -178,15 +190,27 @@ class Parser {
         return { key: keyTok.text, value };
     }
 
-    parseGroup(): GroupNode {
-        const nameTok = this.expect('IDENT');
-        const groupName = nameTok ? nameTok.text : 'group';
-        this.expect('LBRACE');
+    parseGroup(explicitName?: string): GroupNode {
+        // If explicitName provided, we've already consumed the name token.
+        let groupName = explicitName;
+        if (!groupName) {
+            const nameTok = this.expect('IDENT');
+            groupName = nameTok ? nameTok.text : 'group';
+        }
+
+        // Expect LBRACE (either current token is LBRACE or next)
+        if (this.peek().type === 'LBRACE') {
+            this.next();
+        } else {
+            this.expect('LBRACE'); // will return null if missing, but continue parsing defensively
+        }
+
         const children: BlockNode[] = [];
 
         while (!this.eof() && this.peek().type !== 'RBRACE') {
             if (this.peek().type === 'NEWLINE' || this.peek().type === 'OTHER') { this.next(); continue; }
 
+            // Nested group or entity-with-brace
             if (this.peek().type === 'IDENT' && this.peek(1).type === 'LBRACE') {
                 if (this.looksLikeEntityDef()) {
                     children.push(this.parseEntityOrNode());
@@ -215,7 +239,10 @@ class Parser {
             }
 
             if (this.looksLikeEdgeLine()) {
-                this.parseEdgeLine(); // consume
+                // consume edges inside group — they may connect internal/external nodes
+                const groupEdges = this.parseEdgeLine(); // currently we discard; could store
+                // optional: store or process groupEdges if you want to attach edges to root
+                children; // no-op
                 continue;
             }
 
@@ -223,7 +250,7 @@ class Parser {
         }
 
         if (this.peek().type === 'RBRACE') this.next();
-        return { kind: 'group', name: groupName, children };
+        return { kind: 'group', name: groupName!, children };
     }
 
     parseEntityOrNode(): EntityNode {
@@ -346,6 +373,7 @@ class Parser {
             else if (t.type === 'GT_LT') parts.push({ kind: 'connector', text: '<>' });
             else if (t.type === 'GT') parts.push({ kind: 'connector', text: '>' });
             else if (t.type === 'ARROW') parts.push({ kind: 'connector', text: t.text });
+            else if (t.type === 'DASH') parts.push({ kind: 'connector', text: '-' });
             else if (t.type === 'COLON') parts.push({ kind: 'colon', text: ':' });
             else if (t.type === 'COMMA') parts.push({ kind: 'other', text: ',' });
             else if (t.type === 'STRING') parts.push({ kind: 'other', text: `"${t.text}"` });
@@ -405,6 +433,7 @@ class Parser {
                 const nextNodes = next.nodes;
                 let kind: EdgeNode['kind'] = 'directed';
                 if (connector === '<>') kind = 'bidirectional';
+                else if (connector === '-') kind = 'undirected';
                 else kind = 'directed';
 
                 const froms = lastNodes ?? [];
