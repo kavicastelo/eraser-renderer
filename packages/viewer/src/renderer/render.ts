@@ -3,7 +3,7 @@ import { ViewerRenderResult, ViewerRenderOptions } from '../types/viewer-types';
 import { renderNode } from './render-node';
 import { renderGroup } from './render-group';
 import { renderEdge } from './render-edge';
-import {GroupLayout, NodeLayout, RoutedEdge} from "@eraser/core";
+import {DiagramAST, GroupLayout, NodeLayout, RoutedEdge} from "@eraser/core";
 
 export interface LayoutResult {
     nodes: Record<string, NodeLayout>;
@@ -14,7 +14,7 @@ export interface LayoutResult {
 }
 
 export function renderToSVGElement(
-    ast: any,
+    ast: DiagramAST,
     options: ViewerRenderOptions = {}
 ): ViewerRenderResult {
 

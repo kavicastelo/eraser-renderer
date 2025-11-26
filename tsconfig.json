@@ -3,6 +3,6 @@
   "references": [
     { "path": "./packages/core" },
     { "path": "./packages/viewer" },
-    { "path": "./apps/playground" }
+    { "path": "./apps" }
   ]
 }
