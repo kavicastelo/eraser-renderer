@@ -8,33 +8,34 @@ import {
   OnChanges,
   SimpleChanges,
   AfterViewInit,
+  OnDestroy,
   ChangeDetectionStrategy,
   ChangeDetectorRef,
-  NgZone
+  NgZone,
+  inject,
+  PLATFORM_ID,
 } from '@angular/core';
+import { parseEraserDSL, DiagramAST } from '@eraser/core';
+import { computeDiagramLayout, renderToSVGElement } from '@eraser/viewer';
+import { DOCUMENT, isPlatformBrowser, NgIf } from '@angular/common';
 
-import {parseEraserDSL, DiagramAST} from '@eraser/core';
-import {computeDiagramLayout, renderToSVGElement} from '@eraser/viewer';
-import {NgIf} from '@angular/common';
+export type DiagramTheme = 'light' | 'dark';
 
-/**
- * Angular wrapper component that:
- *  - accepts `code` (string) or `ast` (DiagramAST)
- *  - builds layout via core
- *  - renders SVG via the pure TS viewer renderer
- *
- * Usage:
- * <diagram-viewer [code]="codeText"></diagram-viewer>
- * OR
- * <diagram-viewer [ast]="astObj"></diagram-viewer>
- */
+export interface DiagramViewerEvent {
+  ast?: DiagramAST;
+  svg?: SVGSVGElement;
+  error?: string;
+}
+
 @Component({
   selector: 'diagram-viewer',
   template: `
-    <div class="diagram-viewer-root">
-      <div class="toolbar">
-        <button (click)="fitToView()">Fit</button>
-        <button (click)="resetView()">Reset</button>
+    <div class="diagram-viewer-root" [class.dark]="theme === 'dark'">
+      <div class="toolbar" *ngIf="showToolbar">
+        <button (click)="fitToView()" title="Fit to view">Fit</button>
+        <button (click)="zoomIn()" title="Zoom In">+</button>
+        <button (click)="zoomOut()" title="Zoom Out">-</button>
+        <button (click)="resetView()" title="Reset">Reset</button>
       </div>
 
       <div #host class="svg-host" aria-live="polite"></div>
@@ -46,161 +47,258 @@ import {NgIf} from '@angular/common';
     </div>
   `,
   styles: [`
-    :host {
-      display: block;
-      width: 100%;
-      height: 100%;
-      position: relative;
-    }
+      .diagram-viewer-root {
+        width: 100%;
+        height: 100%;
+        min-height: calc(100vh - 40px);
+        background: var(--viewer-bg);
+        color: var(--viewer-fg);
+        position: relative;
+        overflow: hidden;
+        border-radius: 12px;
+      }
 
-    .svg-host {
-      width: 100%;
-      height: 100%;
-      min-height: calc(100vh - 32px);
-      overflow: auto;
-      background: var(--viewer-bg, #fff);
-    }
+      .svg-host {
+        width: 100%;
+        height: 100%;
+        background: var(--viewer-bg);
+      }
 
-    .toolbar {
-      position: absolute;
-      top: 8px;
-      right: 8px;
-      z-index: 20;
-      display: flex;
-      gap: 8px;
-    }
+      .toolbar {
+        position: absolute;
+        top: 32px;
+        right: 12px;
+        z-index: 100;
+        background: var(--toolbar-bg);
+        backdrop-filter: blur(8px);
+        padding: 8px;
+        border-radius: 12px;
+        display: flex;
+        gap: 8px;
+        box-shadow: var(--toolbar-shadow);
+        font-size: 13px;
+      }
 
-    .error {
-      position: absolute;
-      left: 8px;
-      bottom: 8px;
-      right: 8px;
-      background: rgba(255, 240, 240, 0.95);
-      padding: 8px;
-      border-radius: 6px;
-      color: #900;
-    }
-  `],
-  changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [
-    NgIf
+      .toolbar button {
+        padding: 6px 10px;
+        border: none;
+        background: #0066ff;
+        color: white;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 500;
+        font-size: 12px;
+      }
+
+      .toolbar button:hover {
+        background: #0052cc;
+      }
+
+      .error {
+        position: absolute;
+        bottom: 16px;
+        left: 16px;
+        right: 16px;
+        background: rgba(255, 100, 100, 0.15);
+        color: #c62828;
+        padding: 12px;
+        border-radius: 8px;
+        border: 1px solid #ffcdd2;
+        z-index: 100;
+        backdrop-filter: blur(4px);
+      }
+    `,
   ],
-  standalone: true
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [NgIf],
+  standalone: true,
 })
-export class DiagramViewerComponent implements OnChanges, AfterViewInit {
-  /** Either provide raw Eraser DSL code or a DiagramAST. AST takes precedence. */
+export class DiagramViewerComponent
+  implements OnChanges, AfterViewInit, OnDestroy
+{
+  private readonly ngZone = inject(NgZone);
+  private readonly cdr = inject(ChangeDetectorRef);
+  private readonly platformId = inject(PLATFORM_ID);
+
   @Input() code?: string;
   @Input() ast?: DiagramAST;
+  @Input() theme: DiagramTheme = 'light';
+  @Input() showToolbar = true;
+  @Input() fitOnLoad = true;
 
-  /** Emits when an AST/layout/svg becomes available or on error */
-  @Output() loaded = new EventEmitter<{ ast?: DiagramAST; svg?: SVGSVGElement; error?: string }>();
+  @Output() loaded = new EventEmitter<DiagramViewerEvent>();
+  @Output() zoomChange = new EventEmitter<number>();
 
   @ViewChild('host', { static: true }) hostRef!: ElementRef<HTMLDivElement>;
 
   error?: string;
+
+  // Internal State
   private currentSvg?: SVGSVGElement | null;
+  private panZoomInstance?: any;
+  private panZoomLib: any;
 
-  // viewbox management for fit/reset (keeps a copy of last bounds)
-  private lastBounds: { width: number; height: number } | null = null;
+  get isBrowser() {
+    return isPlatformBrowser(this.platformId);
+  }
 
-  constructor(private cd: ChangeDetectorRef, private zone: NgZone) {}
-
-  ngAfterViewInit(): void {
-    // initial render if inputs are already set
-    this.rebuild();
+  async ngAfterViewInit() {
+    if (!this.isBrowser) return;
+    // Load library once
+    if (!this.panZoomLib) {
+      this.panZoomLib = (await import('svg-pan-zoom')).default;
+    }
+    this.render();
   }
 
   ngOnChanges(changes: SimpleChanges): void {
-    // rebuild on input changes
+    if (!this.isBrowser) return;
+
+    // If code or ast changed, full re-render
     if (changes['code'] || changes['ast']) {
-      this.rebuild();
+      this.render();
+    }
+
+    // If only theme changed, just apply styles (cheaper)
+    if (changes['theme'] && !changes['theme'].firstChange) {
+      this.applyTheme();
     }
   }
 
-  private rebuild() {
-    // run reconstruction outside Angular to avoid heavy sync work causing change detection churn
-    this.zone.runOutsideAngular(() => {
-      try {
-        this.error = undefined;
-        // 1) get AST
-        const ast = this.ast ?? (this.code ? parseEraserDSL(this.code, 'unknown') : undefined);
+  ngOnDestroy(): void {
+    this.destroyPanZoom();
+  }
 
+  /**
+   * Main Render Loop
+   */
+  private render() {
+    if (!this.isBrowser || !this.panZoomLib) return;
+
+    this.ngZone.runOutsideAngular(() => {
+      try {
+        // 1. Clean up previous
+        this.destroyPanZoom();
+        this.clearHost();
+        this.error = undefined;
+
+        // 2. Parse / Compute
+        const ast = this.ast ?? (this.code ? parseEraserDSL(this.code, 'unknown') : null);
         if (!ast) {
-          this.clearHost();
-          this.emitLoaded(undefined, undefined, 'No code or AST provided');
+          this.emitState({ error: 'No content' });
           return;
         }
 
-        // 2) compute layout
-        const layout = computeDiagramLayout(ast);
+        const layout = computeDiagramLayout(ast); // Optional: use for specific sizing logic
+        const result = renderToSVGElement(ast);
+        if (!result.svg) throw new Error('Failed to render SVG');
 
-        // store bounds for fitToView
-        if (!layout?.width || !layout?.height) {
-          throw new Error("Layout has no bounds — AST incomplete or invalid.");
-        }
+        // 3. Update DOM
+        this.ngZone.run(() => {
+          const svg = result.svg;
+          // Set basic sizing for the container
+          svg.setAttribute('width', '100%');
+          svg.setAttribute('height', '100%');
 
-        this.lastBounds = {
-          width: layout.width,
-          height: layout.height
-        };
+          this.hostRef.nativeElement.appendChild(svg);
+          this.currentSvg = svg;
 
-        // 3) render to an SVG element (pure TS viewer)
-        const svg = renderToSVGElement(ast);
+          this.applyTheme();
+          this.initPanZoom(svg);
 
-        // ensure the returned element is an <svg>
-        if (!svg || !(svg.svg instanceof SVGSVGElement)) {
-          throw new Error('Renderer did not return an SVG element.');
-        }
-
-        // 4) insert into DOM (back in Angular zone)
-        this.zone.run(() => {
-          this.clearHost();
-          // style wrapper to make svg responsive
-          svg.svg.setAttribute('width', '100%');
-          svg.svg.setAttribute('height', '100%');
-          svg.svg.style.display = 'block';
-          this.hostRef.nativeElement.appendChild(svg.svg);
-          this.currentSvg = svg.svg;
-          this.cd.markForCheck();
-          this.emitLoaded(ast, svg.svg, undefined);
+          this.emitState({ ast, svg });
         });
 
       } catch (err: any) {
-        const msg = (err && err.message) ? err.message : String(err);
-        this.zone.run(() => {
-          this.clearHost();
-          this.error = msg;
-          this.cd.markForCheck();
-          this.emitLoaded(undefined, undefined, msg);
+        this.ngZone.run(() => {
+          this.error = err.message || String(err);
+          this.cdr.markForCheck();
+          this.emitState({ error: this.error });
         });
       }
     });
   }
 
+  private initPanZoom(svg: SVGSVGElement) {
+    // Wrap in setTimeout to ensure DOM is ready and painted
+    setTimeout(() => {
+      if (!this.currentSvg) return; // Guard in case destroyed quickly
+
+      this.panZoomInstance = this.panZoomLib(svg, {
+        zoomEnabled: true,
+        panEnabled: true,
+        controlIconsEnabled: false,
+        minZoom: 0.1,
+        maxZoom: 20,
+        fit: this.fitOnLoad,
+        center: this.fitOnLoad,
+        onZoom: (z: number) => this.zoomChange.emit(z),
+      });
+    }, 0);
+  }
+
+  private destroyPanZoom() {
+    if (this.panZoomInstance) {
+      try {
+        this.panZoomInstance.destroy();
+      } catch (e) {
+        console.warn('Error destroying panzoom', e);
+      }
+      this.panZoomInstance = null;
+    }
+  }
+
   private clearHost() {
-    const host = this.hostRef?.nativeElement;
-    if (!host) return;
-    // remove all children
+    const host = this.hostRef.nativeElement;
     while (host.firstChild) host.removeChild(host.firstChild);
     this.currentSvg = null;
   }
 
-  private emitLoaded(ast?: DiagramAST, svg?: SVGSVGElement, error?: string) {
-    this.loaded.emit({ ast, svg, error });
-  }
-
-  // Public API: fit to view and reset view
-  fitToView(padding = 24) {
-    if (!this.currentSvg || !this.lastBounds) return;
-    // center / fit by setting viewBox
-    const w = Math.max(100, this.lastBounds.width + padding * 2);
-    const h = Math.max(100, this.lastBounds.height + padding * 2);
-    this.currentSvg.setAttribute('viewBox', `0 0 ${w} ${h}`);
-  }
-
-  resetView() {
+  private applyTheme() {
     if (!this.currentSvg) return;
-    // clear viewBox so default SVG scaling applies
-    this.currentSvg.removeAttribute('viewBox');
+    const bg = this.theme === 'dark' ? '#1e1e1e' : '#ffffff';
+    const fg = this.theme === 'dark' ? '#e0e0e0' : '#1f1f1f';
+
+    // Apply to host background
+    this.hostRef.nativeElement.style.backgroundColor = bg;
+
+    // Apply to SVG styles (basic override)
+    this.currentSvg.style.backgroundColor = bg;
+    this.currentSvg.style.color = fg;
+    this.currentSvg.style.fill = fg;
+    this.currentSvg.style.stroke = fg;
+  }
+
+  private emitState(state: DiagramViewerEvent) {
+    this.loaded.emit(state);
+    this.cdr.markForCheck();
+  }
+
+  // === Public API for Parent Component ===
+
+  public fitToView() {
+    if (this.panZoomInstance) {
+      this.panZoomInstance.fit();
+      this.panZoomInstance.center();
+    }
+  }
+
+  public zoomIn() {
+    this.panZoomInstance?.zoomIn();
+  }
+
+  public zoomOut() {
+    this.panZoomInstance?.zoomOut();
+  }
+
+  public resetView() {
+    this.panZoomInstance?.reset();
+  }
+
+  /**
+   * Helper for export functionality in parent
+   */
+  public getSvgElement(): SVGSVGElement | null {
+    return this.currentSvg || null;
   }
 }

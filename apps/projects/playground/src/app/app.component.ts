@@ -1,81 +1,201 @@
-import { Component } from '@angular/core';
+import {Component, ViewChild, ElementRef, AfterViewInit, OnDestroy, inject} from '@angular/core';
 import { DiagramViewerComponent } from 'diagram-viewer';
-import {JsonPipe} from '@angular/common';
+import { basicSetup } from 'codemirror';
+import { javascript } from '@codemirror/lang-javascript';
+import { oneDark } from '@codemirror/theme-one-dark';
+import { EditorState } from '@codemirror/state';
+import { EditorView } from '@codemirror/view';
+import { NgIf } from '@angular/common';
+import { saveAs } from 'file-saver';
+import { isPlatformBrowser } from '@angular/common';
+import { PLATFORM_ID } from '@angular/core';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [DiagramViewerComponent, JsonPipe],
+  imports: [DiagramViewerComponent, NgIf],
   templateUrl: './app.component.html',
+  styleUrls: ['./app.component.scss'],
 })
-export class AppComponent {
-  codeText = `
-title Admin System - Data Flow Diagram (DFD Level 1)
+export class AppComponent implements AfterViewInit {
+  @ViewChild('viewer') diagramViewer!: DiagramViewerComponent;
+  @ViewChild('editor') editorRef!: ElementRef;
+
+  private readonly platformId = inject(PLATFORM_ID);
+
+  codeText = `title Role–Permission Matrix
 
 direction right
 colorMode pastel
 styleMode shadow
 typeface clean
 
-// Actors
-Actors {
-    superadmin[icon: shield, color: blue, label: "Super Admin"]
+// Roles
+Roles {
+    super_admin[icon: shield, color: blue, label: "Super Admin"]
     enterprise_admin[icon: building, color: blue, label: "Enterprise Admin"]
     coach_user[icon: user, color: blue, label: "Coach / User"]
 }
 
-// Processes
-Processes {
-    admin_portal[icon: screen, color: purple, label: "Admin Portal (UI)"]
-    admin_api[icon: share, color: purple, label: "Admin API Gateway"]
-    org_process[icon: settings, color: green, label: "Org Management Process"]
-    user_process[icon: users, color: green, label: "User/Coach Management Process"]
-    billing_process[icon: credit-card, color: green, label: "Billing Process"]
-    reports_process[icon: chart, color: green, label: "Reporting Process"]
+// Modules
+Modules {
+    org_mgmt[icon: settings, color: green, label: "Organization Management"]
+    user_mgmt[icon: users, color: green, label: "User & Coach Mgmt"]
+    billing[icon: creditcard, color: green, label: "Billing & Invoicing"]
+    reports[icon: chart, color: green, label: "Reports & Analytics"]
 }
 
-// Data Stores
-Stores {
-    audit_log[icon: file, color: orange, label: "Audit Logs"]
-    rbac_store[icon: key, color: orange, label: "RBAC Policies"]
-    billing_store[icon: bank, color: orange, label: "Billing Records"]
-    analytics_store[icon: bar-chart, color: orange, label: "Analytics Data"]
-}
+// Role → Permission mappings
+super_admin>org_mgmt: Full Access
+super_admin>user_mgmt: Full Access
+super_admin>billing: Full Access
+super_admin>reports: Full Access
 
-// External Systems
-External {
-    idp[icon: lock, color: gray, label: "Identity Provider (SSO)"]
-    payment_gateway[icon: credit-card, color: gray, label: "Payment Gateway"]
-}
+enterprise_admin>org_mgmt: Manage Org
+enterprise_admin>user_mgmt: Manage Users
+enterprise_admin>billing: View Billing
+enterprise_admin>reports: View Reports
 
-// Flows
-superadmin>admin_portal: UI actions
-enterprise_admin>admin_portal: Admin actions
-coach_user>admin_portal: Verification request
+coach_user>user_mgmt: Request Verification
+coach_user>reports: Limited Insights
+`;
 
-admin_portal>admin_api: API calls
+  isDark = false;
+  error = '';
+  private editor!: EditorView;
 
-admin_api>org_process: Org operations
-admin_api>user_process: User operations
-admin_api>billing_process: Billing ops
-admin_api>reports_process: Reporting queries
+  get isBrowser() {
+    return isPlatformBrowser(this.platformId);
+  }
 
-org_process>idp: Configure SSO
-billing_process>payment_gateway: Charges / refunds
+  async ngAfterViewInit() {
+    if (!this.isBrowser) return;
+    this.initCodeMirror();
+    this.onCodeChange(); // initial render
+  }
 
-user_process>rbac_store: Read/write roles
-user_process>audit_log: Log changes
+  private initCodeMirror() {
+    if (!this.isBrowser) return;
+    const updateListener = EditorView.updateListener.of((update) => {
+      if (update.docChanged) {
+        this.codeText = update.state.doc.toString();
+        this.onCodeChange();
+      }
+    });
 
-billing_process>billing_store: Store invoices
-reports_process>analytics_store: Query/report data
-reports_process>audit_log: Log exports
+    this.editor = new EditorView({
+      state: EditorState.create({
+        doc: this.codeText,
+        extensions: [
+          basicSetup,
+          javascript(),
+          this.isDark ? oneDark : [],
+          updateListener,
+        ],
+      }),
+      parent: this.editorRef.nativeElement,
+    });
+  }
 
-  `;
+  onLoaded(event: any) {
+    if (!this.isBrowser) return;
+    if (event.error) {
+      this.error = event.error;
+    } else {
+      this.error = '';
+    }
+  }
 
-  lastEvent: any;
+  fitToView() {
+    if (!this.isBrowser) return;
+    this.diagramViewer?.fitToView();
+  }
 
-  onLoaded(ev: any) {
-    this.lastEvent = ev;
-    console.log('[diagram loaded]', ev);
+  resetZoom() {
+    if (!this.isBrowser) return;
+    this.diagramViewer?.resetView();
+  }
+
+  toggleTheme() {
+    if (!this.isBrowser) return;
+    this.isDark = !this.isDark;
+    document.body.classList.toggle('dark', this.isDark);
+
+    // Create a new EditorState with the updated theme
+    const newState = EditorState.create({
+      doc: this.codeText,
+      extensions: [
+        basicSetup,
+        javascript(),
+        this.isDark ? oneDark : [],
+        EditorView.updateListener.of((update) => {
+          if (update.docChanged) {
+            this.codeText = update.state.doc.toString();
+            this.onCodeChange();
+          }
+        }),
+        EditorView.theme({
+          '&': { height: '100%' },
+          '.cm-scroller': { fontFamily: 'Fira Code, monospace' },
+        }),
+      ],
+    });
+
+    // Update the editor state by dispatching the change
+    this.editor.setState(newState);
+
+    // Re-render diagram with new background
+    this.onCodeChange();
+  }
+
+  // === Export Logic ===
+
+  exportSVG() {
+    if (!this.isBrowser) return;
+
+    // Ask the library for the current SVG element safely
+    const svg = this.diagramViewer?.hostRef.nativeElement.querySelector('svg');
+
+    if (!svg) return;
+    const blob = new Blob([svg.outerHTML], { type: 'image/svg+xml' });
+    saveAs(blob, 'diagram.svg');
+  }
+
+  async exportPNG() {
+    const svg = this.diagramViewer?.hostRef.nativeElement.querySelector('svg');
+    if (!svg) return;
+
+    // Standard canvas drawing logic...
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d')!;
+    const img = new Image();
+    const svgData = new XMLSerializer().serializeToString(svg);
+    const blob = new Blob([svgData], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(blob);
+
+    img.onload = () => {
+      // Handle High DPI
+      canvas.width = (this.diagramViewer.hostRef.nativeElement.clientWidth || 800) * 2;
+      canvas.height = (this.diagramViewer.hostRef.nativeElement.clientHeight || 600) * 2;
+      ctx.fillStyle = this.isDark ? '#1e1e1e' : '#ffffff';
+      ctx.fillRect(0,0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+      canvas.toBlob((b) => {
+        saveAs(b!, 'diagram.png');
+        URL.revokeObjectURL(url);
+      });
+    };
+    img.src = url;
+  }
+
+  private onCodeChange() {
+    if (!this.isBrowser) return;
+    // Trigger re-render
+    this.codeText = this.codeText;
+  }
+
+  onZoom($event: number) {
+
   }
 }
