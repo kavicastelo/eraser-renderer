@@ -51,7 +51,7 @@ export interface GroupLayout {
 
     // Parent/child relationships
     ast: ASTGroup;
-    children: string[]; // child node ids
+    children: string[] // child node ids
 
     padding: number; // default 16
 }
@@ -84,4 +84,16 @@ export interface DiagramLayout {
 
     // Useful for zoom-to-fit
     bounds: Rect;
+}
+
+/* ===============================================
+ * Layout Engine
+ * =============================================== */
+
+export interface LayoutResult {
+    nodes: Record<string, NodeLayout>;
+    groups: Record<string, GroupLayout>;
+    edges: RoutedEdge[];
+    width: number;
+    height: number;
 }

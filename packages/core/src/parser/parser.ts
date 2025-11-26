@@ -115,13 +115,14 @@ class Parser {
 
                 // Lone identifier node
                 const loneIdent = this.next();
-                while (!this.eof() && this.peek().type !== 'NEWLINE') this.next();
                 rootBlocks.push({
                     kind: 'entity',
                     id: loneIdent.text,
                     attrs: {},
                     raw: loneIdent.text
                 } as EntityNode);
+                // consume rest of line
+                while (!this.eof() && this.peek().type !== 'NEWLINE') this.next();
                 continue;
             }
 
@@ -363,9 +364,14 @@ class Parser {
         while (i < lineTokens.length) {
             const t = lineTokens[i];
             if (t.type === 'LBRACK') {
+                // skip entire attribute block
+                let depth = 1;
                 i++;
-                while (i < lineTokens.length && lineTokens[i].type !== 'RBRACK') i++;
-                i++;
+                while (i < lineTokens.length && depth > 0) {
+                    if (lineTokens[i].type === 'LBRACK') depth++;
+                    if (lineTokens[i].type === 'RBRACK') depth--;
+                    i++;
+                }
                 continue;
             }
 
