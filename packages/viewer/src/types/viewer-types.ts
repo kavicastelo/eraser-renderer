@@ -4,6 +4,7 @@ export interface ViewerRenderOptions {
     scale?: number;
     padding?: number;
     theme?: 'light' | 'dark';
+    shadow?: boolean;
 }
 
 export interface ViewerRenderResult {

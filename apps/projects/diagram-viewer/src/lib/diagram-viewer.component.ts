@@ -16,7 +16,7 @@ import {
   PLATFORM_ID,
 } from '@angular/core';
 import { parseEraserDSL, DiagramAST } from '@eraser/core';
-import { computeDiagramLayout, renderToSVGElement } from '@eraser/viewer';
+import {computeDiagramLayout, renderToSVGElement, ViewerRenderOptions} from '@eraser/viewer';
 import { DOCUMENT, isPlatformBrowser, NgIf } from '@angular/common';
 
 export type DiagramTheme = 'light' | 'dark';
@@ -162,6 +162,7 @@ export class DiagramViewerComponent
     // If only theme changed, just apply styles (cheaper)
     if (changes['theme'] && !changes['theme'].firstChange) {
       this.applyTheme();
+      this.render();
     }
   }
 
@@ -183,14 +184,16 @@ export class DiagramViewerComponent
         this.error = undefined;
 
         // 2. Parse / Compute
-        const ast = this.ast ?? (this.code ? parseEraserDSL(this.code, 'unknown') : null);
+        const ast = this.ast ?? (this.code ? parseEraserDSL(this.code, 'flow') : null);
         if (!ast) {
           this.emitState({ error: 'No content' });
           return;
         }
 
         const layout = computeDiagramLayout(ast); // Optional: use for specific sizing logic
-        const result = renderToSVGElement(ast);
+
+        let options: ViewerRenderOptions = { theme: this.theme, shadow: true, padding: 32 };
+        const result = renderToSVGElement(ast, options);
         if (!result.svg) throw new Error('Failed to render SVG');
 
         // 3. Update DOM
@@ -263,10 +266,10 @@ export class DiagramViewerComponent
     this.hostRef.nativeElement.style.backgroundColor = bg;
 
     // Apply to SVG styles (basic override)
-    this.currentSvg.style.backgroundColor = bg;
-    this.currentSvg.style.color = fg;
-    this.currentSvg.style.fill = fg;
-    this.currentSvg.style.stroke = fg;
+    // this.currentSvg.style.backgroundColor = bg;
+    // this.currentSvg.style.color = fg;
+    // this.currentSvg.style.fill = fg;
+    // this.currentSvg.style.stroke = fg;
   }
 
   private emitState(state: DiagramViewerEvent) {

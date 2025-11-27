@@ -32,7 +32,7 @@ typeface clean
 
 // Roles
 Roles {
-    super_admin[icon: shield, color: blue, label: "Super Admin"]
+    super_admin[icon: shield, color: blue, label: "Super Admin", colorMode: outline]
     enterprise_admin[icon: building, color: blue, label: "Enterprise Admin"]
     coach_user[icon: user, color: blue, label: "Coach / User"]
 }

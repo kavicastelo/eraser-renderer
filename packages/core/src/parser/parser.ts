@@ -137,6 +137,10 @@ class Parser {
             this.next();
         }
 
+        if (this.diagramType === 'unknown') {
+            this.diagramType = this.detectDiagramType(this.tokens);
+        }
+
         return {
             diagramType: this.diagramType,
             metadata,
@@ -462,6 +466,55 @@ class Parser {
         }
 
         return edges;
+    }
+
+    private detectDiagramType(tokens: Token[]): DiagramType {
+        let sawArrow = false;
+        let sawBidirectional = false;
+        let sawEntityFields = false;
+        let sawClassKeyword = false;
+        let sawSequenceKeywords = false;
+
+        for (let i = 0; i < tokens.length; i++) {
+            const t = tokens[i];
+
+            // Graph-style arrows
+            if (t.type === 'ARROW' || t.type === 'GT') sawArrow = true;
+            if (t.type === 'GT_LT') sawBidirectional = true;
+            if (t.type === 'DASH') sawArrow = true;
+
+            // ER: detect IDENT IDENT inside { }
+            if (t.type === 'IDENT' && tokens[i + 1]?.type === 'IDENT') {
+                const next = tokens[i + 2];
+                if (next?.type === 'RBRACE' || next?.type === 'STRING') {
+                    sawEntityFields = true;
+                }
+            }
+
+            // Class diagrams
+            if (t.type === 'IDENT' && t.text.toLowerCase() === 'class') {
+                sawClassKeyword = true;
+            }
+
+            // Sequence diagrams
+            if (
+                t.type === 'IDENT' &&
+                ['participant', 'activate', 'deactivate', 'note', 'alt', 'loop'].includes(
+                    t.text.toLowerCase()
+                )
+            ) {
+                sawSequenceKeywords = true;
+            }
+        }
+
+        // --- Classification ---
+        if (sawSequenceKeywords) return 'sequence';
+        if (sawClassKeyword) return 'class';
+        if (sawEntityFields) return 'er';
+        if (sawBidirectional) return 'graph';
+        if (sawArrow) return 'graph';
+
+        return 'unknown';
     }
 }
 
