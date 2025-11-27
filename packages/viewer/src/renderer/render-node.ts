@@ -3,7 +3,7 @@ import { IconRegistry } from './icons';
 import { resolveColor, ColorMode } from './colors';
 import { ViewerRenderOptions } from '@eraser/viewer';
 
-export function renderNode(node: NodeLayout, options: ViewerRenderOptions): SVGElement {
+export function renderNode(node: NodeLayout, options: ViewerRenderOptions, metadata: any): SVGElement {
     const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     g.setAttribute('transform', `translate(${node.bounds.x}, ${node.bounds.y})`);
 
@@ -13,7 +13,7 @@ export function renderNode(node: NodeLayout, options: ViewerRenderOptions): SVGE
     // 1. Resolve Style & Color
     // Priority: Node Attribute > Diagram Metadata > Default
     const colorKey = node.ast.attrs?.color;
-    const mode: ColorMode = (node.ast.attrs?.colorMode as ColorMode) ||
+    const mode: ColorMode = (node.ast.attrs?.colorMode as ColorMode) || (metadata?.colorMode as ColorMode) ||
         (options.theme === 'dark' ? 'solid' : 'pastel');
 
     const colors = resolveColor(colorKey, mode, options.theme || 'light');

@@ -38,6 +38,7 @@ export interface DiagramViewerEvent {
         <button (click)="resetView()" title="Reset">Reset</button>
       </div>
 
+      <div class="title" *ngIf="diagramTitle">{{diagramTitle}}</div>
       <div #host class="svg-host" aria-live="polite"></div>
 
       <div *ngIf="error" class="error">
@@ -56,6 +57,16 @@ export interface DiagramViewerEvent {
         position: relative;
         overflow: hidden;
         border-radius: 12px;
+      }
+
+      .title {
+        color: var(--viewer-fg);
+        position: absolute;
+        top: 8px;
+        left: 16px;
+        font-size: 14px;
+        font-weight: 500;
+        z-index: 100;
       }
 
       .svg-host {
@@ -137,6 +148,7 @@ export class DiagramViewerComponent
   private currentSvg?: SVGSVGElement | null;
   private panZoomInstance?: any;
   private panZoomLib: any;
+  public diagramTitle?: string; // Set by metadata
 
   get isBrowser() {
     return isPlatformBrowser(this.platformId);
@@ -184,7 +196,7 @@ export class DiagramViewerComponent
         this.error = undefined;
 
         // 2. Parse / Compute
-        const ast = this.ast ?? (this.code ? parseEraserDSL(this.code, 'flow') : null);
+        const ast = this.ast ?? (this.code ? parseEraserDSL(this.code) : null);
         if (!ast) {
           this.emitState({ error: 'No content' });
           return;
@@ -192,9 +204,10 @@ export class DiagramViewerComponent
 
         const layout = computeDiagramLayout(ast); // Optional: use for specific sizing logic
 
-        let options: ViewerRenderOptions = { theme: this.theme, shadow: true, padding: 32 };
+        let options: ViewerRenderOptions = { theme: this.theme, shadow: true };
         const result = renderToSVGElement(ast, options);
         if (!result.svg) throw new Error('Failed to render SVG');
+        this.diagramTitle = ast.metadata['title'] as string;
 
         // 3. Update DOM
         this.ngZone.run(() => {

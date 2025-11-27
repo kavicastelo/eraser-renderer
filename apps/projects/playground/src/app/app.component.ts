@@ -1,14 +1,14 @@
 import {Component, ViewChild, ElementRef, AfterViewInit, OnDestroy, inject} from '@angular/core';
-import { DiagramViewerComponent } from 'diagram-viewer';
-import { basicSetup } from 'codemirror';
-import { javascript } from '@codemirror/lang-javascript';
-import { oneDark } from '@codemirror/theme-one-dark';
-import { EditorState } from '@codemirror/state';
-import { EditorView } from '@codemirror/view';
-import { NgIf } from '@angular/common';
-import { saveAs } from 'file-saver';
-import { isPlatformBrowser } from '@angular/common';
-import { PLATFORM_ID } from '@angular/core';
+import {DiagramViewerComponent} from 'diagram-viewer';
+import {basicSetup} from 'codemirror';
+import {javascript} from '@codemirror/lang-javascript';
+import {oneDark} from '@codemirror/theme-one-dark';
+import {EditorState} from '@codemirror/state';
+import {EditorView} from '@codemirror/view';
+import {NgIf} from '@angular/common';
+import {saveAs} from 'file-saver';
+import {isPlatformBrowser} from '@angular/common';
+import {PLATFORM_ID} from '@angular/core';
 
 @Component({
   selector: 'app-root',
@@ -23,41 +23,88 @@ export class AppComponent implements AfterViewInit {
 
   private readonly platformId = inject(PLATFORM_ID);
 
-  codeText = `title Role–Permission Matrix
-
+  codeText = `title System Architecture (simple)
 direction right
 colorMode pastel
 styleMode shadow
-typeface clean
 
-// Roles
-Roles {
-    super_admin[icon: shield, color: blue, label: "Super Admin", colorMode: outline]
-    enterprise_admin[icon: building, color: blue, label: "Enterprise Admin"]
-    coach_user[icon: user, color: blue, label: "Coach / User"]
+// -----------------------
+// FRONTEND
+// -----------------------
+group frontend {
+    spa[icon: web, label: "Angular SPA", color: red]
+    pwa[icon: web, label: "PWA (optional)", color: yellow]
 }
 
-// Modules
-Modules {
-    org_mgmt[icon: settings, color: green, label: "Organization Management"]
-    user_mgmt[icon: users, color: green, label: "User & Coach Mgmt"]
-    billing[icon: creditcard, color: green, label: "Billing & Invoicing"]
-    reports[icon: chart, color: green, label: "Reports & Analytics"]
+// -----------------------
+// API GATEWAY
+// -----------------------
+gateway[icon: cloud, label: "API Gateway", color: orange]
+
+
+// -----------------------
+// MICROSERVICES
+// -----------------------
+group services {
+    auth[icon: server, label: "Auth Service", color: blue]
+    user[icon: server, label: "User Service", color: purple]
+    coach[icon: server, label: "Coach Service", color: neutral]
+    booking[icon: server, label: "Booking Service", color: neutral]
+    ai[icon: server, label: "AI Service", color: "#000"]
+    payment[icon: server, label: "Payment Service", color: purple]
+    notif[icon: server, label: "Notification Service", color: gray]
+    analytics[icon: server, label: "Analytics Service", color: purple]
 }
 
-// Role → Permission mappings
-super_admin>org_mgmt: Full Access
-super_admin>user_mgmt: Full Access
-super_admin>billing: Full Access
-super_admin>reports: Full Access
+// -----------------------
+// DATA / STORAGE / EXTERNALS
+// -----------------------
+group storage {
+    mongo[icon: mongodb, label: "MongoDB Cluster", color: green]
+    redis[icon: cache, label: "Redis Cache", color: "#000"]
+    kafka[icon: kafka, label: "Kafka Event Bus", color: blue]
+    elastic[icon: search, label: "ElasticSearch", color: orange]
+    s3[icon: storage, label: "Object Storage (S3)", color: green]
+    openai[icon: ai, label: "OpenAI API", color: "#000"]
+    zoom[icon: video, label: "Zoom/WebRTC", color: blue]
+}
 
-enterprise_admin>org_mgmt: Manage Org
-enterprise_admin>user_mgmt: Manage Users
-enterprise_admin>billing: View Billing
-enterprise_admin>reports: View Reports
 
-coach_user>user_mgmt: Request Verification
-coach_user>reports: Limited Insights
+// -----------------------
+// CONNECTIONS
+// -----------------------
+
+// Frontend → Gateway
+spa>gateway
+pwa>gateway
+
+// Gateway → Microservices
+gateway>auth
+gateway>user
+gateway>coach
+gateway>booking
+gateway>ai
+gateway>payment
+gateway>notif
+gateway>analytics
+
+// Microservices → Datastores
+user>mongo
+coach>mongo
+booking>mongo
+payment>mongo
+analytics>mongo
+
+// Event-driven connections
+booking>kafka
+payment>kafka
+notif>kafka
+
+// Specialized integrations
+coach>elastic
+ai>openai
+payment>s3
+booking>zoom
 `;
 
   isDark = false;
@@ -82,6 +129,10 @@ coach_user>reports: Limited Insights
         this.onCodeChange();
       }
     });
+    const theme = EditorView.theme({
+      '&': {height: '100%'},
+      '.cm-scroller': {fontFamily: 'Fira Code, monospace'},
+    });
 
     this.editor = new EditorView({
       state: EditorState.create({
@@ -91,6 +142,7 @@ coach_user>reports: Limited Insights
           javascript(),
           this.isDark ? oneDark : [],
           updateListener,
+          theme
         ],
       }),
       parent: this.editorRef.nativeElement,
@@ -135,8 +187,8 @@ coach_user>reports: Limited Insights
           }
         }),
         EditorView.theme({
-          '&': { height: '100%' },
-          '.cm-scroller': { fontFamily: 'Fira Code, monospace' },
+          '&': {height: '100%'},
+          '.cm-scroller': {fontFamily: 'Fira Code, monospace'},
         }),
       ],
     });
@@ -157,7 +209,7 @@ coach_user>reports: Limited Insights
     const svg = this.diagramViewer?.hostRef.nativeElement.querySelector('svg');
 
     if (!svg) return;
-    const blob = new Blob([svg.outerHTML], { type: 'image/svg+xml' });
+    const blob = new Blob([svg.outerHTML], {type: 'image/svg+xml'});
     saveAs(blob, 'diagram.svg');
   }
 
@@ -170,7 +222,7 @@ coach_user>reports: Limited Insights
     const ctx = canvas.getContext('2d')!;
     const img = new Image();
     const svgData = new XMLSerializer().serializeToString(svg);
-    const blob = new Blob([svgData], { type: 'image/svg+xml' });
+    const blob = new Blob([svgData], {type: 'image/svg+xml'});
     const url = URL.createObjectURL(blob);
 
     img.onload = () => {
@@ -178,7 +230,7 @@ coach_user>reports: Limited Insights
       canvas.width = (this.diagramViewer.hostRef.nativeElement.clientWidth || 800) * 2;
       canvas.height = (this.diagramViewer.hostRef.nativeElement.clientHeight || 600) * 2;
       ctx.fillStyle = this.isDark ? '#1e1e1e' : '#ffffff';
-      ctx.fillRect(0,0, canvas.width, canvas.height);
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
       canvas.toBlob((b) => {

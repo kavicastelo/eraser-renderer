@@ -24,7 +24,26 @@ export function renderToSVGElement(
     svg.setAttribute('width', `${totalWidth * scale}`);
     svg.setAttribute('height', `${totalHeight * scale}`);
     svg.setAttribute('viewBox', `0 0 ${totalWidth} ${totalHeight}`);
-    svg.style.fontFamily = 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+    switch (ast.metadata.typeface) {
+        case 'serif':
+            svg.style.fontFamily = 'ui-serif, Georgia, Cambria, "Times New Roman", Times, serif';
+            break;
+        case 'sans-serif':
+            svg.style.fontFamily = 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+            break;
+        case 'monospace':
+            svg.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
+            break;
+        case 'cursive':
+            svg.style.fontFamily = 'cursive';
+            break;
+        case 'clean':
+            svg.style.fontFamily = 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+            break;
+        default:
+            svg.style.fontFamily = 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+            break;
+    }
 
     // 3. Inject Global Defs (Markers, Filters)
     svg.appendChild(createDefs());
@@ -47,7 +66,7 @@ export function renderToSVGElement(
 
     // Nodes (Top layer)
     Object.values(layout.nodes).forEach(node => {
-        content.appendChild(renderNode(node, options));
+        content.appendChild(renderNode(node, options, ast.metadata));
     });
 
     svg.appendChild(content);
