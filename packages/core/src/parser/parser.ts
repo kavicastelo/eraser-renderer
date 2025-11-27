@@ -8,10 +8,8 @@ import {
     GroupNode,
     FieldDef,
     EdgeNode,
-    TokenType
 } from "../types-bridge";
 
-// actually re-declare TokenType locally for runtime checks; TokenType used in earlier parser was a type alias
 type _TokenType = Token['type'];
 
 class Parser {
@@ -69,77 +67,66 @@ class Parser {
                 const next1 = this.peek(1);
                 const next2 = this.peek(2);
 
-                // Special-case: "group NAME {"
-                if (t.text.toLowerCase() === 'group' && next1 && next1.type === 'IDENT' && next2 && next2.type === 'LBRACE') {
-                    // consume 'group' and the name, then parse group body
-                    this.next(); // consume 'group'
+                // "group NAME {"
+                if (t.text.toLowerCase() === 'group' && next1?.type === 'IDENT' && next2?.type === 'LBRACE') {
+                    this.next(); // 'group'
                     const nameTok = this.expect('IDENT');
-                    const group = this.parseGroup(nameTok ? nameTok.text : undefined);
+                    const group = this.parseGroup(nameTok?.text);
                     rootBlocks.push(group);
                     continue;
                 }
 
-                // Group start: Name {   (e.g. "Deployments { ... }")
-                if (next1 && next1.type === 'LBRACE') {
+                // Name {
+                if (next1?.type === 'LBRACE') {
                     if (this.looksLikeEntityDef()) {
-                        const node = this.parseEntityOrNode();
-                        rootBlocks.push(node);
+                        rootBlocks.push(this.parseEntityOrNode());
                     } else {
-                        const group = this.parseGroup();
-                        rootBlocks.push(group);
+                        rootBlocks.push(this.parseGroup());
                     }
                     continue;
                 }
 
-                // Node with attrs: id [ ... ]
-                if (next1 && next1.type === 'LBRACK') {
-                    const node = this.parseEntityOrNode();
-                    rootBlocks.push(node);
+                // id [...]
+                if (next1?.type === 'LBRACK') {
+                    rootBlocks.push(this.parseEntityOrNode());
                     continue;
                 }
 
                 // Edge or metadata
-                const isEdgeLine = this.looksLikeEdgeLine();
-                if (isEdgeLine) {
-                    const parsedEdges = this.parseEdgeLine();
-                    edges.push(...parsedEdges);
+                if (this.looksLikeEdgeLine()) {
+                    edges.push(...this.parseEdgeLine());
                     continue;
                 }
 
-                // Metadata line
-                const metaPair = this.parseMetadataLine();
-                if (metaPair) {
-                    metadata[metaPair.key] = metaPair.value;
+                // Metadata: key value
+                const meta = this.parseMetadataLine();
+                if (meta) {
+                    metadata[meta.key] = meta.value;
                     continue;
                 }
 
-                // Lone identifier node
-                const loneIdent = this.next();
+                // Lone identifier
+                const idTok = this.next();
                 rootBlocks.push({
                     kind: 'entity',
-                    id: loneIdent.text,
+                    id: idTok.text,
                     attrs: {},
-                    raw: loneIdent.text
+                    raw: idTok.text
                 } as EntityNode);
-                // consume rest of line
                 while (!this.eof() && this.peek().type !== 'NEWLINE') this.next();
                 continue;
             }
 
-            if (t.type === 'EOF') break;
-
             if (this.looksLikeEdgeLine()) {
-                const parsed = this.parseEdgeLine();
-                edges.push(...parsed);
+                edges.push(...this.parseEdgeLine());
                 continue;
             }
 
             this.next();
         }
 
-        if (this.diagramType === 'unknown') {
-            this.diagramType = this.detectDiagramType(this.tokens);
-        }
+        // Always infer diagram type from the actual parsed structure
+        this.diagramType = this.inferDiagramType(rootBlocks, edges, metadata);
 
         return {
             diagramType: this.diagramType,
@@ -150,35 +137,114 @@ class Parser {
         };
     }
 
+    // Robust, AST-based diagram type detection
+    private inferDiagramType(
+        rootBlocks: BlockNode[],
+        edges: EdgeNode[],
+        metadata: Record<string, string | boolean>
+    ): DiagramType {
+        // 1. Explicit metadata wins
+        if (metadata['type'] && typeof metadata['type'] === 'string') {
+            return metadata['type'] as DiagramType;
+        }
+
+        let hasFields = false;                    // ER / Class
+        let hasDirectedEdges = false;
+        let hasActorStyleAttrs = false;           // [icon:], [color:], [label:]
+        let hasAutoNumber = false;
+        let hasSequenceKeywordInLabel = false;
+        let hasParticipantLikeNode = false;
+
+        // Check metadata
+        if (metadata['autoNumber'] !== undefined) hasAutoNumber = true;
+        if (metadata['title'] || metadata['colorMode'] || metadata['styleMode']) hasActorStyleAttrs = true;
+
+        // Scan edges
+        for (const e of edges) {
+            if (e.kind === 'directed' || e.kind === 'bidirectional') hasDirectedEdges = true;
+            if (e.label) {
+                const l = e.label.toLowerCase();
+                if (/activate|deactivate|note|alt|loop|over|return|destroy|ref/i.test(l)) {
+                    hasSequenceKeywordInLabel = true;
+                }
+            }
+        }
+
+        // Scan all blocks
+        const visit = (node: BlockNode) => {
+            if (node.kind === 'entity') {
+                if (node.fields && node.fields.length > 0) {
+                    hasFields = true;
+                }
+                if (node.attrs) {
+                    const keys = Object.keys(node.attrs).map(k => k.toLowerCase());
+                    if (keys.some(k => k === 'icon' || k === 'color' || k === 'label' || k === 'shape')) {
+                        hasActorStyleAttrs = true;
+                    }
+                    if (node.attrs['participant'] || node.attrs['actor']) {
+                        hasParticipantLikeNode = true;
+                    }
+                }
+
+                // Node name hints
+                const id = node.id.toLowerCase();
+                if (['participant', 'actor', 'user', 'client', 'server', 'database'].includes(id)) {
+                    hasParticipantLikeNode = true;
+                }
+            }
+
+            if (node.kind === 'group') {
+                const name = node.name.toLowerCase();
+                if (['participant', 'actor', 'boundary', 'control', 'entity', 'database'].includes(name)) {
+                    hasParticipantLikeNode = true;
+                }
+                node.children.forEach(visit);
+            }
+        };
+
+        rootBlocks.forEach(visit);
+
+        // Decision tree — highest confidence first
+        if (hasAutoNumber || hasSequenceKeywordInLabel || hasParticipantLikeNode) {
+            return 'sequence';
+        }
+
+        if (hasActorStyleAttrs && hasDirectedEdges && edges.length >= 3) {
+            return 'sequence';   // Very strong Mermaid-style signal
+        }
+
+        if (hasFields) {
+            return 'er';
+        }
+
+        if (edges.length > 0) {
+            return 'graph';
+        }
+
+        return 'unknown';
+    }
+
     looksLikeEntityDef(): boolean {
         let i = 2;
-        while(true) {
+        while (true) {
             const t = this.peek(i);
-            if (t.type === 'EOF') return false;
-            if (t.type === 'RBRACE') return false;
+            if (!t || t.type === 'EOF' || t.type === 'RBRACE') return false;
             if (t.type === 'NEWLINE' || t.type === 'OTHER') { i++; continue; }
             break;
         }
-
         const t1 = this.peek(i);
-        const t2 = this.peek(i+1);
-        if (t1.type === 'IDENT' && t2.type === 'IDENT') return true;
-        if (t1.type === 'IDENT' && t2.type === 'STRING') return true;
-        if (t1.type === 'IDENT' && (t2.type === 'LBRACK' || t2.type === 'LBRACE')) return false;
-        return false;
+        const t2 = this.peek(i + 1);
+        return t1.type === 'IDENT' && (t2.type === 'IDENT' || t2.type === 'STRING' || t2.type === 'LBRACK');
     }
 
     looksLikeEdgeLine(): boolean {
         let i = 0;
         while (true) {
             const t = this.peek(i);
-            if (!t || t.type === 'EOF') return false;
-            if (t.type === 'NEWLINE') break;
-            // Detect any connector tokens: >, <>, ->, --\>, or single dash
-            if (t.type === 'GT' || t.type === 'GT_LT' || t.type === 'ARROW' || t.type === 'DASH') return true;
+            if (!t || t.type === 'EOF' || t.type === 'NEWLINE') return false;
+            if ([ 'GT', 'GT_LT', 'ARROW', 'DASH' ].includes(t.type)) return true;
             i++;
         }
-        return false;
     }
 
     parseMetadataLine(): { key: string; value: string | boolean } | null {
@@ -186,76 +252,47 @@ class Parser {
         if (!keyTok) return null;
         const pieces: string[] = [];
         while (!this.eof() && this.peek().type !== 'NEWLINE') {
-            const t = this.next();
-            pieces.push(t.text);
+            pieces.push(this.next().text);
         }
         if (this.peek().type === 'NEWLINE') this.next();
         const value = pieces.join(' ').trim();
-        if (value === '') return { key: keyTok.text, value: true };
-        return { key: keyTok.text, value };
+        return { key: keyTok.text, value: value === '' ? true : value };
     }
 
     parseGroup(explicitName?: string): GroupNode {
-        // If explicitName provided, we've already consumed the name token.
-        let groupName = explicitName;
-        if (!groupName) {
-            const nameTok = this.expect('IDENT');
-            groupName = nameTok ? nameTok.text : 'group';
+        let name = explicitName;
+        if (!name) {
+            const tok = this.expect('IDENT');
+            name = tok ? tok.text : 'group';
         }
-
-        // Expect LBRACE (either current token is LBRACE or next)
-        if (this.peek().type === 'LBRACE') {
-            this.next();
-        } else {
-            this.expect('LBRACE'); // will return null if missing, but continue parsing defensively
-        }
+        this.consumeIf('LBRACE');
 
         const children: BlockNode[] = [];
-
         while (!this.eof() && this.peek().type !== 'RBRACE') {
             if (this.peek().type === 'NEWLINE' || this.peek().type === 'OTHER') { this.next(); continue; }
 
-            // Nested group or entity-with-brace
             if (this.peek().type === 'IDENT' && this.peek(1).type === 'LBRACE') {
-                if (this.looksLikeEntityDef()) {
-                    children.push(this.parseEntityOrNode());
-                } else {
-                    children.push(this.parseGroup());
-                }
+                children.push(this.looksLikeEntityDef() ? this.parseEntityOrNode() : this.parseGroup());
                 continue;
             }
-
+            if (this.peek().type === 'IDENT' && this.peek(1).type === 'LBRACK') {
+                children.push(this.parseEntityOrNode());
+                continue;
+            }
             if (this.peek().type === 'IDENT') {
-                const next = this.peek(1);
-                if (next && next.type === 'LBRACK') {
-                    children.push(this.parseEntityOrNode());
-                    continue;
-                } else {
-                    const idTok = this.next();
-                    while (!this.eof() && this.peek().type !== 'NEWLINE') this.next();
-                    children.push({
-                        kind: 'entity',
-                        id: idTok.text,
-                        attrs: {},
-                        raw: idTok.text
-                    } as EntityNode);
-                    continue;
-                }
-            }
-
-            if (this.looksLikeEdgeLine()) {
-                // consume edges inside group — they may connect internal/external nodes
-                const groupEdges = this.parseEdgeLine(); // currently we discard; could store
-                // optional: store or process groupEdges if you want to attach edges to root
-                children; // no-op
+                const idTok = this.next();
+                while (!this.eof() && this.peek().type !== 'NEWLINE') this.next();
+                children.push({ kind: 'entity', id: idTok.text, attrs: {}, raw: idTok.text } as EntityNode);
                 continue;
             }
-
+            if (this.looksLikeEdgeLine()) {
+                this.parseEdgeLine(); // discard internal edges for now
+                continue;
+            }
             this.next();
         }
-
         if (this.peek().type === 'RBRACE') this.next();
-        return { kind: 'group', name: groupName!, children };
+        return { kind: 'group', name: name!, children };
     }
 
     parseEntityOrNode(): EntityNode {
@@ -266,9 +303,8 @@ class Parser {
 
         if (this.peek().type === 'LBRACK') {
             this.next();
-            const attrPairs = this.collectUntil('RBRACK');
-            const kvs = this.tokensToKeyValues(attrPairs);
-            Object.assign(attrs, kvs);
+            const pairs = this.collectUntil('RBRACK');
+            Object.assign(attrs, this.tokensToKeyValues(pairs));
             if (this.peek().type === 'RBRACK') this.next();
         }
 
@@ -283,28 +319,24 @@ class Parser {
                     let typeTok: Token | null = null;
                     const constraints: string[] = [];
 
-                    if (this.peek().type === 'IDENT') {
-                        typeTok = this.next();
-                    }
+                    if (this.peek().type === 'IDENT') typeTok = this.next();
 
-                    const remaining: string[] = [];
-                    while (!this.eof() && this.peek().type !== 'NEWLINE' && this.peek().type !== 'RBRACE') {
+                    const rest: string[] = [];
+                    while (!this.eof() && ![ 'NEWLINE', 'RBRACE' ].includes(this.peek().type)) {
                         const t = this.next();
-                        if (t.type === 'IDENT' || t.type === 'STRING') remaining.push(t.text);
-                        else if (t.type === 'COMMA') continue;
-                        else remaining.push(t.text);
+                        if (t.type !== 'COMMA') rest.push(t.text);
                     }
 
-                    const constraintText = remaining.join(' ').trim();
-                    if (constraintText.length > 0) { constraints.push(...constraintText.split(/\s+/)); }
+                    const constraintText = rest.join(' ').trim();
+                    if (constraintText) constraints.push(...constraintText.split(/\s+/));
 
                     if (this.peek().type === 'NEWLINE') this.next();
 
                     fields.push({
                         name: nameTok.text,
-                        type: typeTok ? typeTok.text : undefined,
+                        type: typeTok?.text,
                         constraints,
-                        raw: `${nameTok.text} ${typeTok ? typeTok.text : ''} ${constraintText}`.trim()
+                        raw: `${nameTok.text} ${typeTok?.text ?? ''} ${constraintText}`.trim()
                     });
                     continue;
                 }
@@ -329,29 +361,24 @@ class Parser {
     tokensToKeyValues(tokens: Token[]): Record<string, string> {
         const out: Record<string, string> = {};
         let i = 0;
-        const n = tokens.length;
-        while (i < n) {
-            while (i < n && (tokens[i].type === 'NEWLINE' || tokens[i].type === 'OTHER')) i++;
-            if (i >= n) break;
+        while (i < tokens.length) {
+            while (i < tokens.length && (tokens[i].type === 'NEWLINE' || tokens[i].type === 'OTHER')) i++;
+            if (i >= tokens.length) break;
 
-            const k = tokens[i];
-            if (k.type !== 'IDENT') { i++; continue; }
+            if (tokens[i].type !== 'IDENT') { i++; continue; }
+            const key = tokens[i].text; i++;
 
-            const key = k.text;
-            i++;
-            while (i < n && tokens[i].type !== 'COLON') i++;
-            if (i < n && tokens[i].type === 'COLON') i++;
+            while (i < tokens.length && tokens[i].type !== 'COLON') i++;
+            if (i < tokens.length && tokens[i].type === 'COLON') i++;
 
-            const valParts: string[] = [];
-            while (i < n && tokens[i].type !== 'COMMA') {
-                const t = tokens[i];
-                if (t.type === 'STRING') valParts.push(t.text);
-                else valParts.push(t.text);
+            const val: string[] = [];
+            while (i < tokens.length && tokens[i].type !== 'COMMA') {
+                val.push(tokens[i].text);
                 i++;
             }
-            if (i < n && tokens[i].type === 'COMMA') i++;
+            if (i < tokens.length && tokens[i].type === 'COMMA') i++;
 
-            out[key] = valParts.join(' ').trim();
+            out[key] = val.join(' ').trim();
         }
         return out;
     }
@@ -368,9 +395,7 @@ class Parser {
         while (i < lineTokens.length) {
             const t = lineTokens[i];
             if (t.type === 'LBRACK') {
-                // skip entire attribute block
-                let depth = 1;
-                i++;
+                let depth = 1; i++;
                 while (i < lineTokens.length && depth > 0) {
                     if (lineTokens[i].type === 'LBRACK') depth++;
                     if (lineTokens[i].type === 'RBRACK') depth--;
@@ -385,136 +410,73 @@ class Parser {
             else if (t.type === 'ARROW') parts.push({ kind: 'connector', text: t.text });
             else if (t.type === 'DASH') parts.push({ kind: 'connector', text: '-' });
             else if (t.type === 'COLON') parts.push({ kind: 'colon', text: ':' });
-            else if (t.type === 'COMMA') parts.push({ kind: 'other', text: ',' });
-            else if (t.type === 'STRING') parts.push({ kind: 'other', text: `"${t.text}"` });
-            else if (t.type === 'OTHER') parts.push({ kind: 'other', text: t.text });
+            else parts.push({ kind: 'other', text: t.text });
 
             i++;
         }
 
-        let label = undefined;
-        const colonIndex = parts.findIndex(p => p.kind === 'colon');
-        let tokenChainParts = parts;
-        if (colonIndex >= 0) {
-            const labelParts = parts.slice(colonIndex + 1).map(p => p.text);
-            label = labelParts.join(' ').trim();
-            tokenChainParts = parts.slice(0, colonIndex);
+        let label: string | undefined;
+        const colonIdx = parts.findIndex(p => p.kind === 'colon');
+        const chainParts = colonIdx >= 0 ? parts.slice(0, colonIdx) : parts;
+        if (colonIdx >= 0) {
+            label = parts.slice(colonIdx + 1).map(p => p.text).join(' ').trim() || undefined;
         }
 
         const chain: Array<{ nodes: string[] } | { connector: string }> = [];
-        let idx = 0;
-        while (idx < tokenChainParts.length) {
-            const p = tokenChainParts[idx];
+        i = 0;
+        while (i < chainParts.length) {
+            const p = chainParts[i];
             if (p.kind === 'node') {
-                const nodes = [p.text];
-                idx++;
-                while (idx < tokenChainParts.length && tokenChainParts[idx].text === ',') {
-                    idx++;
-                    if (idx < tokenChainParts.length && tokenChainParts[idx].kind === 'node') {
-                        nodes.push(tokenChainParts[idx].text);
-                        idx++;
+                const nodes = [p.text]; i++;
+                while (i < chainParts.length && chainParts[i].text === ',') {
+                    i++;
+                    if (i < chainParts.length && chainParts[i].kind === 'node') {
+                        nodes.push(chainParts[i].text);
+                        i++;
                     }
                 }
                 chain.push({ nodes });
-                continue;
             } else if (p.kind === 'connector') {
                 chain.push({ connector: p.text });
-                idx++;
-                continue;
+                i++;
             } else {
-                idx++;
+                i++;
             }
         }
 
         const edges: EdgeNode[] = [];
-        let cIdx = 0;
         let lastNodes: string[] | null = null;
-        while (cIdx < chain.length) {
-            const el = chain[cIdx];
+        i = 0;
+        while (i < chain.length) {
+            const el = chain[i];
             if ('nodes' in el) {
                 lastNodes = el.nodes;
-                cIdx++;
+                i++;
                 continue;
             }
-            if ('connector' in el) {
-                const connector = el.connector;
-                const next = chain[cIdx + 1];
-                if (!next || !('nodes' in next)) { cIdx += 1; continue; }
-                const nextNodes = next.nodes;
-                let kind: EdgeNode['kind'] = 'directed';
-                if (connector === '<>') kind = 'bidirectional';
-                else if (connector === '-') kind = 'undirected';
-                else kind = 'directed';
-
-                const froms = lastNodes ?? [];
-                for (const f of froms) {
-                    for (const t of nextNodes) {
+            if ('connector' in el && lastNodes) {
+                const next = chain[i + 1];
+                if (!next || !('nodes' in next)) { i++; continue; }
+                const kind = el.connector === '<>' ? 'bidirectional' : el.connector === '-' ? 'undirected' : 'directed';
+                for (const from of lastNodes) {
+                    for (const to of next.nodes) {
                         edges.push({
-                            from: f,
-                            to: t,
+                            from,
+                            to,
                             kind,
                             label,
-                            raw: `${f} ${connector} ${t}` + (label ? ` : ${label}` : ''),
+                            raw: `${from} ${el.connector} ${to}` + (label ? ` : ${label}` : '')
                         });
                     }
                 }
-                cIdx += 2;
-                lastNodes = nextNodes;
-                continue;
+                lastNodes = next.nodes;
+                i += 2;
+            } else {
+                i++;
             }
-            cIdx++;
         }
 
         return edges;
-    }
-
-    private detectDiagramType(tokens: Token[]): DiagramType {
-        let sawArrow = false;
-        let sawBidirectional = false;
-        let sawEntityFields = false;
-        let sawClassKeyword = false;
-        let sawSequenceKeywords = false;
-
-        for (let i = 0; i < tokens.length; i++) {
-            const t = tokens[i];
-
-            // Graph-style arrows
-            if (t.type === 'ARROW' || t.type === 'GT') sawArrow = true;
-            if (t.type === 'GT_LT') sawBidirectional = true;
-            if (t.type === 'DASH') sawArrow = true;
-
-            // ER: detect IDENT IDENT inside { }
-            if (t.type === 'IDENT' && tokens[i + 1]?.type === 'IDENT') {
-                const next = tokens[i + 2];
-                if (next?.type === 'RBRACE' || next?.type === 'STRING') {
-                    sawEntityFields = true;
-                }
-            }
-
-            // Class diagrams
-            if (t.type === 'IDENT' && t.text.toLowerCase() === 'class') {
-                sawClassKeyword = true;
-            }
-
-            // Sequence diagrams
-            if (
-                t.type === 'IDENT' &&
-                ['participant', 'activate', 'deactivate', 'note', 'alt', 'loop'].includes(
-                    t.text.toLowerCase()
-                )
-            ) {
-                sawSequenceKeywords = true;
-            }
-        }
-
-        // --- Classification ---
-        if (sawSequenceKeywords) return 'sequence';
-        if (sawClassKeyword) return 'class';
-        if (sawEntityFields) return 'er';
-        if (sawBidirectional) return 'graph';
-        if (sawArrow) return 'graph';
-
-        return 'unknown';
     }
 }
 
