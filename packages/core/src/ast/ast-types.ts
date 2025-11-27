@@ -1,4 +1,4 @@
-export type DiagramType = 'flow' | 'cloud' | 'er' | 'sequence' | 'bpmn' | 'unknown';
+export type DiagramType = 'flow' | 'cloud' | 'er' | 'sequence' | 'bpmn' | 'class' | 'graph' | 'unknown';
 
 export interface DiagramAST {
     diagramType: DiagramType;
