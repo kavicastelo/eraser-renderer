@@ -5,6 +5,7 @@ export interface ViewerRenderOptions {
     padding?: number;
     theme?: 'light' | 'dark';
     shadow?: boolean;
+    diagramType?: string;
 }
 
 export interface ViewerRenderResult {

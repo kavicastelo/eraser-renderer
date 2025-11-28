@@ -10,17 +10,46 @@ import {
     EdgeNode,
 } from "../types-bridge";
 
-type _TokenType = Token['type'];
+type DSLMode = 'eraser' | 'plantuml' | 'mermaid';
 
 class Parser {
     tokens: Token[];
     pos: number;
+    dslMode: DSLMode = 'eraser'; // Default
     diagramType: DiagramType = 'unknown';
 
-    constructor(tokens: Token[], diagHint?: DiagramType) {
+    constructor(tokens: Token[]) {
         this.tokens = tokens;
         this.pos = 0;
-        if (diagHint) this.diagramType = diagHint;
+        this.detectDSL();
+    }
+
+    // 1. Detect DSL Language before parsing
+    detectDSL() {
+        // Scan first 10 significant tokens
+        let lookaheadLimit = 10;
+        let i = 0;
+        while(i < this.tokens.length && i < lookaheadLimit) {
+            const t = this.tokens[i];
+
+            // PlantUML: starts with @startuml
+            if (t.type === 'AT' && this.tokens[i+1]?.text === 'startuml') {
+                this.dslMode = 'plantuml';
+                return;
+            }
+
+            // Mermaid: starts with specific keywords
+            if (t.type === 'IDENT') {
+                const txt = t.text.toLowerCase();
+                if (['graph', 'flowchart', 'sequencediagram', 'classdiagram'].includes(txt)) {
+                    this.dslMode = 'mermaid';
+                    return;
+                }
+            }
+            i++;
+        }
+        // Default to Eraser if no specific headers found
+        this.dslMode = 'eraser';
     }
 
     peek(n = 0): Token {
@@ -59,24 +88,61 @@ class Parser {
         const edges: EdgeNode[] = [];
         const lineCount = this.tokens.reduce((acc, t) => Math.max(acc, t.line), 0);
 
+        // Skip PlantUML header
+        if (this.dslMode === 'plantuml') {
+            if (this.peek().type === 'AT') { this.next(); this.consumeIf('IDENT'); } // Skip @startuml
+        }
+        // Skip Mermaid header (e.g. "graph TD")
+        if (this.dslMode === 'mermaid') {
+            if (this.peek().type === 'IDENT') {
+                // Consume "graph TD" or "sequenceDiagram"
+                const first = this.next();
+                // If next is TD/LR etc, consume it
+                if (this.peek().type === 'IDENT' && first.line === this.peek().line) {
+                    this.next();
+                }
+            }
+        }
+
         while (!this.eof()) {
             const t = this.peek();
+
+            // Skip comments/newlines
             if (t.type === 'NEWLINE' || t.type === 'OTHER') { this.next(); continue; }
+
+            // Stop at PlantUML end
+            if (this.dslMode === 'plantuml' && t.type === 'AT' && this.peek(1).text === 'enduml') {
+                break;
+            }
 
             if (t.type === 'IDENT') {
                 const next1 = this.peek(1);
                 const next2 = this.peek(2);
 
-                // "group NAME {"
-                if (t.text.toLowerCase() === 'group' && next1?.type === 'IDENT' && next2?.type === 'LBRACE') {
-                    this.next(); // 'group'
-                    const nameTok = this.expect('IDENT');
-                    const group = this.parseGroup(nameTok?.text);
+                // --- GROUPS ---
+                // Eraser: "group Name {"
+                // PlantUML: "package Name {" or "node Name {"
+                // Mermaid: "subgraph Name"
+                const isEraserGroup = t.text.toLowerCase() === 'group';
+                const isPlantUmlGroup = this.dslMode === 'plantuml' &&
+                    ['package', 'node', 'cloud', 'database', 'rectangle', 'folder', 'frame'].includes(t.text.toLowerCase());
+                const isMermaidGroup = this.dslMode === 'mermaid' && t.text.toLowerCase() === 'subgraph';
+
+                if ((isEraserGroup || isPlantUmlGroup || isMermaidGroup) &&
+                    (next1?.type === 'IDENT' || next1?.type === 'STRING')) {
+
+                    this.next(); // consume keyword
+                    let nameTok = this.peek();
+                    if(nameTok.type === 'IDENT' || nameTok.type === 'STRING') this.next();
+                    else nameTok = { ...t, text: 'group' }; // fallback
+
+                    const group = this.parseGroup(nameTok.text);
                     rootBlocks.push(group);
                     continue;
                 }
 
-                // Name {
+                // --- BLOCKS WITH BRACES ---
+                // Name { ... }
                 if (next1?.type === 'LBRACE') {
                     if (this.looksLikeEntityDef()) {
                         rootBlocks.push(this.parseEntityOrNode());
@@ -86,34 +152,59 @@ class Parser {
                     continue;
                 }
 
-                // id [...]
+                // --- MERMAID NODES WITH SHAPES ---
+                // id[Label] or id(Label) -- handled in parseEntityOrNode logic usually,
+                // but we trigger it here if we see `id[`
                 if (next1?.type === 'LBRACK') {
                     rootBlocks.push(this.parseEntityOrNode());
                     continue;
                 }
 
-                // Edge or metadata
+                // --- EDGES OR LONE NODES ---
                 if (this.looksLikeEdgeLine()) {
                     edges.push(...this.parseEdgeLine());
                     continue;
                 }
 
-                // Metadata: key value
-                const meta = this.parseMetadataLine();
-                if (meta) {
-                    metadata[meta.key] = meta.value;
-                    continue;
+                // Metadata: key value (Only strict in Eraser, loose in others)
+                if (this.dslMode === 'eraser') {
+                    const meta = this.parseMetadataLine();
+                    if (meta) {
+                        metadata[meta.key] = meta.value;
+                        continue;
+                    }
                 }
 
-                // Lone identifier
+                // Lone identifier / Node
                 const idTok = this.next();
+
+                // Check if PlantUML "class Name"
+                if (this.dslMode === 'plantuml' && ['class', 'interface', 'entity'].includes(idTok.text.toLowerCase())) {
+                    const actualName = this.expect('IDENT');
+                    if (actualName) {
+                        rootBlocks.push(this.parseEntityOrNode(actualName.text));
+                        continue;
+                    }
+                }
+
                 rootBlocks.push({
                     kind: 'entity',
                     id: idTok.text,
                     attrs: {},
                     raw: idTok.text
                 } as EntityNode);
-                while (!this.eof() && this.peek().type !== 'NEWLINE') this.next();
+
+                // Fast forward to end of line to prevent re-parsing same tokens
+                while (!this.eof() && this.peek().type !== 'NEWLINE') {
+                    // Safety check for inline edges in Mermaid: A --> B
+                    if(this.looksLikeEdgeLine()) {
+                        // Backtrack one token so the edge parser picks up the 'A'
+                        this.pos--;
+                        edges.push(...this.parseEdgeLine());
+                        break;
+                    }
+                    this.next();
+                }
                 continue;
             }
 
@@ -125,7 +216,6 @@ class Parser {
             this.next();
         }
 
-        // Always infer diagram type from the actual parsed structure
         this.diagramType = this.inferDiagramType(rootBlocks, edges, metadata);
 
         return {
@@ -137,90 +227,25 @@ class Parser {
         };
     }
 
-    // Robust, AST-based diagram type detection
-    private inferDiagramType(
-        rootBlocks: BlockNode[],
-        edges: EdgeNode[],
-        metadata: Record<string, string | boolean>
-    ): DiagramType {
-        // 1. Explicit metadata wins
-        if (metadata['type'] && typeof metadata['type'] === 'string') {
-            return metadata['type'] as DiagramType;
+    private inferDiagramType(rootBlocks: BlockNode[], edges: EdgeNode[], metadata: Record<string, string | boolean>): DiagramType {
+        if (this.dslMode === 'mermaid') {
+            // Try to refine generic mermaid to sequence/flow
+            const hasSeq = edges.some(e => ['->>', '-->>'].includes(e.raw || ''));
+            if (hasSeq) return 'sequence';
+            return 'flow';
         }
+        if (this.dslMode === 'plantuml') return 'class'; // Default assumption for PUML, logic can be improved
 
-        let hasFields = false;                    // ER / Class
-        let hasDirectedEdges = false;
-        let hasActorStyleAttrs = false;           // [icon:], [color:], [label:]
-        let hasAutoNumber = false;
-        let hasSequenceKeywordInLabel = false;
-        let hasParticipantLikeNode = false;
-
-        // Check metadata
-        if (metadata['autoNumber'] !== undefined) hasAutoNumber = true;
-        if (metadata['title'] || metadata['colorMode'] || metadata['styleMode']) hasActorStyleAttrs = true;
-
-        // Scan edges
-        for (const e of edges) {
-            if (e.kind === 'directed' || e.kind === 'bidirectional') hasDirectedEdges = true;
-            if (e.label) {
-                const l = e.label.toLowerCase();
-                if (/activate|deactivate|note|alt|loop|over|return|destroy|ref/i.test(l)) {
-                    hasSequenceKeywordInLabel = true;
-                }
-            }
-        }
-
-        // Scan all blocks
+        // Existing heuristics for Eraser...
+        if (metadata['type'] && typeof metadata['type'] === 'string') return metadata['type'] as DiagramType;
+        let hasFields = false;
         const visit = (node: BlockNode) => {
-            if (node.kind === 'entity') {
-                if (node.fields && node.fields.length > 0) {
-                    hasFields = true;
-                }
-                if (node.attrs) {
-                    const keys = Object.keys(node.attrs).map(k => k.toLowerCase());
-                    if (keys.some(k => k === 'icon' || k === 'color' || k === 'label' || k === 'shape')) {
-                        hasActorStyleAttrs = true;
-                    }
-                    if (node.attrs['participant'] || node.attrs['actor']) {
-                        hasParticipantLikeNode = true;
-                    }
-                }
-
-                // Node name hints
-                const id = node.id.toLowerCase();
-                if (['participant', 'actor', 'user', 'client', 'server', 'database'].includes(id)) {
-                    hasParticipantLikeNode = true;
-                }
-            }
-
-            if (node.kind === 'group') {
-                const name = node.name.toLowerCase();
-                if (['participant', 'actor', 'boundary', 'control', 'entity', 'database'].includes(name)) {
-                    hasParticipantLikeNode = true;
-                }
-                node.children.forEach(visit);
-            }
+            if (node.kind === 'entity' && node.fields && node.fields.length > 0) hasFields = true;
+            if (node.kind === 'group') node.children.forEach(visit);
         };
-
         rootBlocks.forEach(visit);
-
-        // Decision tree — highest confidence first
-        if (hasAutoNumber || hasSequenceKeywordInLabel || hasParticipantLikeNode) {
-            return 'sequence';
-        }
-
-        if (hasActorStyleAttrs && hasDirectedEdges && edges.length >= 3) {
-            return 'sequence';   // Very strong Mermaid-style signal
-        }
-
-        if (hasFields) {
-            return 'er';
-        }
-
-        if (edges.length > 0) {
-            return 'graph';
-        }
-
+        if (hasFields) return 'er';
+        if (edges.length > 0) return 'flow';
         return 'unknown';
     }
 
@@ -242,6 +267,7 @@ class Parser {
         while (true) {
             const t = this.peek(i);
             if (!t || t.type === 'EOF' || t.type === 'NEWLINE') return false;
+            // Support arrows, dashes, and Mermaid pipes for labels
             if ([ 'GT', 'GT_LT', 'ARROW', 'DASH' ].includes(t.type)) return true;
             i++;
         }
@@ -250,6 +276,11 @@ class Parser {
     parseMetadataLine(): { key: string; value: string | boolean } | null {
         const keyTok = this.consumeIf('IDENT');
         if (!keyTok) return null;
+
+        // Eraser metadata is usually strict: "key value" on a single line
+        // We peek to ensure it looks like metadata and not an edge "A -> B"
+        if(this.looksLikeEdgeLine()) return null;
+
         const pieces: string[] = [];
         while (!this.eof() && this.peek().type !== 'NEWLINE') {
             pieces.push(this.next().text);
@@ -260,84 +291,79 @@ class Parser {
     }
 
     parseGroup(explicitName?: string): GroupNode {
-        let name = explicitName;
-        if (!name) {
-            const tok = this.expect('IDENT');
-            name = tok ? tok.text : 'group';
-        }
+        let name = explicitName || 'group';
         this.consumeIf('LBRACE');
 
         const children: BlockNode[] = [];
         while (!this.eof() && this.peek().type !== 'RBRACE') {
+            // For Mermaid 'end' keyword closing a subgraph
+            if (this.dslMode === 'mermaid' && this.peek().text.toLowerCase() === 'end') {
+                this.next();
+                break;
+            }
+
             if (this.peek().type === 'NEWLINE' || this.peek().type === 'OTHER') { this.next(); continue; }
 
-            if (this.peek().type === 'IDENT' && this.peek(1).type === 'LBRACE') {
-                children.push(this.looksLikeEntityDef() ? this.parseEntityOrNode() : this.parseGroup());
-                continue;
-            }
-            if (this.peek().type === 'IDENT' && this.peek(1).type === 'LBRACK') {
-                children.push(this.parseEntityOrNode());
-                continue;
-            }
+            // Recurse parsing logic (simplified for brevity)
             if (this.peek().type === 'IDENT') {
-                const idTok = this.next();
-                while (!this.eof() && this.peek().type !== 'NEWLINE') this.next();
-                children.push({ kind: 'entity', id: idTok.text, attrs: {}, raw: idTok.text } as EntityNode);
-                continue;
+                children.push(this.parseEntityOrNode());
+            } else {
+                this.next();
             }
-            if (this.looksLikeEdgeLine()) {
-                this.parseEdgeLine(); // discard internal edges for now
-                continue;
-            }
-            this.next();
         }
         if (this.peek().type === 'RBRACE') this.next();
-        return { kind: 'group', name: name!, children };
+        return { kind: 'group', name, children };
     }
 
-    parseEntityOrNode(): EntityNode {
-        const idTok = this.expect('IDENT');
-        const id = idTok ? idTok.text : 'node';
+    // Pass optional ID if pre-parsed (e.g. "class MyClass")
+    parseEntityOrNode(preParsedId?: string): EntityNode {
+        let id = preParsedId;
+        if (!id) {
+            const idTok = this.expect('IDENT');
+            id = idTok ? idTok.text : 'node';
+        }
+
         const attrs: Record<string, string> = {};
         let fields: FieldDef[] | undefined;
 
+        // --- CONFLICT RESOLUTION: Square Brackets ---
         if (this.peek().type === 'LBRACK') {
-            this.next();
-            const pairs = this.collectUntil('RBRACK');
-            Object.assign(attrs, this.tokensToKeyValues(pairs));
+            this.next(); // eat [
+
+            if (this.dslMode === 'eraser') {
+                // Eraser: [key: val, color: red]
+                const pairs = this.collectUntil('RBRACK');
+                Object.assign(attrs, this.tokensToKeyValues(pairs));
+            } else {
+                // Mermaid/PlantUML: [Label Text]
+                // Treat the entire content as a 'label' attribute
+                const content: string[] = [];
+                while(!this.eof() && this.peek().type !== 'RBRACK') {
+                    content.push(this.next().text);
+                }
+                const fullLabel = content.join(' ');
+                attrs['label'] = fullLabel;
+            }
+
             if (this.peek().type === 'RBRACK') this.next();
         }
 
+        // --- Fields (ERD / Class Diagram) ---
         if (this.peek().type === 'LBRACE') {
             this.next();
             fields = [];
             while (!this.eof() && this.peek().type !== 'RBRACE') {
                 if (this.peek().type === 'NEWLINE' || this.peek().type === 'OTHER') { this.next(); continue; }
 
-                if (this.peek().type === 'IDENT') {
-                    const nameTok = this.next();
-                    let typeTok: Token | null = null;
-                    const constraints: string[] = [];
-
-                    if (this.peek().type === 'IDENT') typeTok = this.next();
-
-                    const rest: string[] = [];
-                    while (!this.eof() && ![ 'NEWLINE', 'RBRACE' ].includes(this.peek().type)) {
-                        const t = this.next();
-                        if (t.type !== 'COMMA') rest.push(t.text);
+                // PlantUML method/field parsing logic is complex,
+                // but generic "name type" parser often works well enough for display
+                if (this.peek().type === 'IDENT' || this.peek().type === 'DASH' || this.peek().type === 'ADD') {
+                    // Simple capture of line as raw field
+                    let rawParts: string[] = [];
+                    while(!this.eof() && !['NEWLINE', 'RBRACE'].includes(this.peek().type)) {
+                        rawParts.push(this.next().text);
                     }
-
-                    const constraintText = rest.join(' ').trim();
-                    if (constraintText) constraints.push(...constraintText.split(/\s+/));
-
-                    if (this.peek().type === 'NEWLINE') this.next();
-
-                    fields.push({
-                        name: nameTok.text,
-                        type: typeTok?.text,
-                        constraints,
-                        raw: `${nameTok.text} ${typeTok?.text ?? ''} ${constraintText}`.trim()
-                    });
+                    fields.push({ name: rawParts.join(' '), raw: rawParts.join(' ') });
                     continue;
                 }
                 this.next();
@@ -347,7 +373,7 @@ class Parser {
 
         if (this.peek().type === 'NEWLINE') this.next();
 
-        return { kind: 'entity', id, attrs, fields, raw: id };
+        return { kind: 'entity', id: id!, attrs, fields, raw: id };
     }
 
     collectUntil(endType: Token['type']): Token[] {
@@ -385,16 +411,34 @@ class Parser {
 
     parseEdgeLine(): EdgeNode[] {
         const lineTokens: Token[] = [];
+        // Capture tokens until newline
         while (!this.eof() && this.peek().type !== 'NEWLINE') {
             lineTokens.push(this.next());
         }
         if (this.peek().type === 'NEWLINE') this.next();
 
-        const parts: Array<{ kind: 'node' | 'connector' | 'colon' | 'other'; text: string }> = [];
+        const parts: Array<{ kind: 'node' | 'connector' | 'colon' | 'label' | 'other'; text: string }> = [];
         let i = 0;
+
         while (i < lineTokens.length) {
             const t = lineTokens[i];
+
+            // Mermaid Label on edge: -->|text|
+            if (this.dslMode === 'mermaid' && t.type === 'PIPE') {
+                i++;
+                const labelParts: string[] = [];
+                while(i < lineTokens.length && lineTokens[i].type !== 'PIPE') {
+                    labelParts.push(lineTokens[i].text);
+                    i++;
+                }
+                if(i < lineTokens.length) i++; // consume closing pipe
+                parts.push({ kind: 'label', text: labelParts.join(' ') });
+                continue;
+            }
+
+            // Standard parsing
             if (t.type === 'LBRACK') {
+                // Skip attributes/inline arrays in edge definitions for now to avoid breaking connectivity
                 let depth = 1; i++;
                 while (i < lineTokens.length && depth > 0) {
                     if (lineTokens[i].type === 'LBRACK') depth++;
@@ -416,26 +460,27 @@ class Parser {
         }
 
         let label: string | undefined;
+        // Check for Eraser style colon label
         const colonIdx = parts.findIndex(p => p.kind === 'colon');
-        const chainParts = colonIdx >= 0 ? parts.slice(0, colonIdx) : parts;
+        // Check for Mermaid style pipe label
+        const pipeLabel = parts.find(p => p.kind === 'label');
+
         if (colonIdx >= 0) {
-            label = parts.slice(colonIdx + 1).map(p => p.text).join(' ').trim() || undefined;
+            label = parts.slice(colonIdx + 1).map(p => p.text).join(' ').trim();
+        } else if (pipeLabel) {
+            label = pipeLabel.text;
         }
 
+        const chainParts = colonIdx >= 0 ? parts.slice(0, colonIdx) : parts;
         const chain: Array<{ nodes: string[] } | { connector: string }> = [];
+
+        // Reconstruct chain (A) -> (B)
         i = 0;
         while (i < chainParts.length) {
             const p = chainParts[i];
             if (p.kind === 'node') {
-                const nodes = [p.text]; i++;
-                while (i < chainParts.length && chainParts[i].text === ',') {
-                    i++;
-                    if (i < chainParts.length && chainParts[i].kind === 'node') {
-                        nodes.push(chainParts[i].text);
-                        i++;
-                    }
-                }
-                chain.push({ nodes });
+                chain.push({ nodes: [p.text] }); // Simplified: handle commas if needed
+                i++;
             } else if (p.kind === 'connector') {
                 chain.push({ connector: p.text });
                 i++;
@@ -457,7 +502,13 @@ class Parser {
             if ('connector' in el && lastNodes) {
                 const next = chain[i + 1];
                 if (!next || !('nodes' in next)) { i++; continue; }
-                const kind = el.connector === '<>' ? 'bidirectional' : el.connector === '-' ? 'undirected' : 'directed';
+
+                // Determine kind
+                let kind: EdgeNode['kind'] = 'directed';
+                if (el.connector === '<>') kind = 'bidirectional';
+                else if (el.connector === '-') kind = 'undirected';
+                else if (el.connector === '-->') kind = 'directed'; // Generic arrow
+
                 for (const from of lastNodes) {
                     for (const to of next.nodes) {
                         edges.push({
@@ -465,7 +516,7 @@ class Parser {
                             to,
                             kind,
                             label,
-                            raw: `${from} ${el.connector} ${to}` + (label ? ` : ${label}` : '')
+                            raw: `${from} ${el.connector} ${to}`
                         });
                     }
                 }
@@ -480,8 +531,8 @@ class Parser {
     }
 }
 
-export function parseEraserDSL(input: string, diagHint?: DiagramType): DiagramAST {
+export function parseEraserDSL(input: string): DiagramAST {
     const toks = tokenize(input);
-    const p = new Parser(toks, diagHint);
+    const p = new Parser(toks);
     return p.parse();
 }

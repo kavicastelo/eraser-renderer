@@ -5,15 +5,16 @@ import {javascript} from '@codemirror/lang-javascript';
 import {oneDark} from '@codemirror/theme-one-dark';
 import {EditorState} from '@codemirror/state';
 import {EditorView} from '@codemirror/view';
-import {NgIf} from '@angular/common';
+import {NgForOf, NgIf} from '@angular/common';
 import {saveAs} from 'file-saver';
 import {isPlatformBrowser} from '@angular/common';
 import {PLATFORM_ID} from '@angular/core';
+import {FormsModule} from '@angular/forms';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [DiagramViewerComponent, NgIf],
+  imports: [DiagramViewerComponent, NgIf, FormsModule, NgForOf],
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.scss'],
 })
@@ -108,6 +109,8 @@ booking>zoom
 `;
 
   isDark = false;
+  diagramType = 'flow';
+  diagramTypes = ['flow', 'class', 'sequence', 'er', 'mindmap', 'bpmn'];
   error = '';
   private editor!: EditorView;
 

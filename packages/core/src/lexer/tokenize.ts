@@ -16,35 +16,30 @@ export function tokenize(input: string): Token[] {
     while (i < len) {
         const ch = input[i];
 
-        // newline
         if (ch === '\n') {
             push('NEWLINE', '\n'); i++; line++; col = 1; continue;
         }
-        // whitespace
         if (/\s/.test(ch)) { i++; col++; continue; }
 
-        // comment //
         if (ch === '/' && input[i+1] === '/') {
             let j = i;
             while (j < len && input[j] !== '\n') j++;
-            const txt = input.slice(i, j);
-            push('OTHER', txt);
+            push('OTHER', input.slice(i, j));
             i = j; continue;
         }
 
-        // arrows (must come before ident)
+        // Arrows
         if (ch === '-') {
             if (input[i+1] === '-' && input[i+2] === '>') { push('ARROW', '-->'); i += 3; col += 3; continue; }
             if (input[i+1] === '>') { push('ARROW', '->'); i += 2; col += 2; continue; }
         }
-
         if (ch === '<') {
             if (input[i+1] === '>') { push('GT_LT', '<>'); i += 2; col += 2; continue; }
             push('LT', '<'); i++; col++; continue;
         }
         if (ch === '>') { push('GT', '>'); i++; col++; continue; }
 
-        // strings
+        // Strings
         if (ch === '"' || ch === "'") {
             const quote = ch;
             let j = i + 1;
@@ -64,7 +59,6 @@ export function tokenize(input: string): Token[] {
             continue;
         }
 
-        // ident / number (including dashes and dots)
         if (isAlphaNumUnderscore(ch)) {
             let j = i;
             let acc = '';
@@ -74,17 +68,17 @@ export function tokenize(input: string): Token[] {
             i = j; col += consumed; continue;
         }
 
-        // punctuation
+        // Punctuation
         if (ch === '{') { push('LBRACE', '{'); i++; col++; continue; }
         if (ch === '}') { push('RBRACE', '}'); i++; col++; continue; }
         if (ch === '[') { push('LBRACK', '['); i++; col++; continue; }
         if (ch === ']') { push('RBRACK', ']'); i++; col++; continue; }
         if (ch === ':') { push('COLON', ':'); i++; col++; continue; }
         if (ch === ',') { push('COMMA', ','); i++; col++; continue; }
-
+        if (ch === '|') { push('PIPE', '|'); i++; col++; continue; }
+        if (ch === '@') { push('AT', '@'); i++; col++; continue; }
         if (ch === '-') { push('DASH', '-'); i++; col++; continue; }
 
-        // fallback
         push('OTHER', ch);
         i++; col++;
     }

@@ -136,6 +136,7 @@ export class DiagramViewerComponent
   @Input() theme: DiagramTheme = 'light';
   @Input() showToolbar = true;
   @Input() fitOnLoad = true;
+  @Input() diagramType?: string;
 
   @Output() loaded = new EventEmitter<DiagramViewerEvent>();
   @Output() zoomChange = new EventEmitter<number>();
@@ -167,7 +168,7 @@ export class DiagramViewerComponent
     if (!this.isBrowser) return;
 
     // If code or ast changed, full re-render
-    if (changes['code'] || changes['ast']) {
+    if (changes['code'] || changes['ast'] || changes['diagramType']) {
       this.render();
     }
 
@@ -204,7 +205,7 @@ export class DiagramViewerComponent
 
         const layout = computeDiagramLayout(ast); // Optional: use for specific sizing logic
 
-        let options: ViewerRenderOptions = { theme: this.theme, shadow: true };
+        let options: ViewerRenderOptions = { theme: this.theme, shadow: true, diagramType: this.diagramType };
         const result = renderToSVGElement(ast, options);
         if (!result.svg) throw new Error('Failed to render SVG');
         this.diagramTitle = ast.metadata['title'] as string;
