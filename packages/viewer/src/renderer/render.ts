@@ -3,24 +3,31 @@ import { renderNode } from './render-node';
 import { renderGroup } from './render-group';
 import { renderEdge } from './render-edge';
 import { DiagramAST, LayoutResult } from "@eraser/core";
-import {computeDiagramLayout} from "../layout/dagre-layout";
+import {computeGraphLayout} from "../layout/dagre-layout";
+import {computeSequenceLayout} from "../layout/sequence-layout";
 
 export function renderToSVGElement(
     ast: DiagramAST,
     options: ViewerRenderOptions = {}
 ): ViewerRenderResult {
 
+    // 1. SELECT LAYOUT ENGINE
     const padding = options.padding ?? 40;
     const scale = options.scale ?? 1.0;
+    let layout: LayoutResult;
 
-    // 1. Compute Layout
-    const layout: LayoutResult = computeDiagramLayout(ast);
+    if (ast.diagramType === 'sequence') {
+        layout = computeSequenceLayout(ast);
+        options.diagramType = 'sequence'; // Pass down to node renderer
+    } else {
+        layout = computeGraphLayout(ast); // Using the Fixed Dagre engine
+        options.diagramType = 'graph';
+    }
 
-    // 2. Setup SVG Container
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     const totalWidth = layout.width + padding * 2;
     const totalHeight = layout.height + padding * 2;
 
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('width', `${totalWidth * scale}`);
     svg.setAttribute('height', `${totalHeight * scale}`);
     svg.setAttribute('viewBox', `0 0 ${totalWidth} ${totalHeight}`);
@@ -45,38 +52,41 @@ export function renderToSVGElement(
             break;
     }
 
-    // 3. Inject Global Defs (Markers, Filters)
     svg.appendChild(createDefs());
 
-    // 4. Content Container (Applied padding)
     const content = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     content.setAttribute('transform', `translate(${padding}, ${padding})`);
 
-    // 5. Render Layers (Groups -> Edges -> Nodes)
+    // Render Groups (Background)
+    if (ast.diagramType !== 'sequence') {
+        Object.values(layout.groups).forEach(g => content.appendChild(renderGroup(g, options)));
+    }
 
-    // Groups (Background layer)
-    Object.values(layout.groups).forEach(group => {
-        content.appendChild(renderGroup(group, options));
-    });
+    // Render Nodes (with Lifelines if sequence)
+    // Note: For sequence, nodes usually go ON TOP of lifelines, but lifelines go BEHIND edges.
+    // Order: Lifelines -> Edges -> Node Headers
 
-    // Edges (Middle layer)
-    layout.edges.forEach(edge => {
-        content.appendChild(renderEdge(edge, options));
-    });
+    // Ideally, split node render into (Lifeline) and (Header).
+    // For simplicity, we render nodes first (if graph) or specifically ordered (if sequence).
 
-    // Nodes (Top layer)
-    Object.values(layout.nodes).forEach(node => {
-        content.appendChild(renderNode(node, options, ast.metadata));
-    });
+    if (ast.diagramType === 'sequence') {
+        // Draw Nodes (headers + lifelines)
+        Object.values(layout.nodes).forEach(node => {
+            content.appendChild(renderNode(node, options, ast.metadata, layout.height));
+        });
+        // Draw Edges (on top of lifelines)
+        layout.edges.forEach(edge => {
+            content.appendChild(renderEdge(edge, options));
+        });
+    } else {
+        // Standard Graph Order
+        layout.edges.forEach(e => content.appendChild(renderEdge(e, options)));
+        Object.values(layout.nodes).forEach(n => content.appendChild(renderNode(n, options, ast.metadata, 0)));
+    }
 
     svg.appendChild(content);
 
-    return {
-        svg,
-        width: totalWidth,
-        height: totalHeight,
-        ast
-    };
+    return { svg, width: totalWidth, height: totalHeight, ast };
 }
 
 /**

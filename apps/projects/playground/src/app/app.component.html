@@ -8,6 +8,11 @@
   <!-- Viewer Panel -->
   <div class="viewer-panel">
     <div class="toolbar">
+      <select [(ngModel)]="diagramType">
+        <option *ngFor="let type of diagramTypes" [value]="type">
+          {{ type }}
+        </option>
+      </select>
       <button (click)="fitToView()" title="Fit to view">Fit</button>
       <button (click)="resetZoom()" title="Reset zoom">100%</button>
       <button (click)="toggleTheme()" title="Toggle dark mode">
@@ -21,6 +26,7 @@
       [code]="codeText"
       [theme]="isDark ? 'dark' : 'light'"
       [fitOnLoad]="true"
+      [diagramType]="diagramType"
       (loaded)="onLoaded($event)"
       (zoomChange)="onZoom($event)"
       #viewer

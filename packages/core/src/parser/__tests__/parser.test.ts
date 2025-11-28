@@ -7,7 +7,7 @@ direction right
 
 User [icon: user]
 `;
-        const ast = parseEraserDSL(code, "flow");
+        const ast = parseEraserDSL(code);
         expect(ast).toBeDefined();
         expect(ast.metadata.title).toBe("My Diagram");
         expect(ast.metadata.direction).toBe("right");
@@ -20,7 +20,7 @@ User [icon: user]
         const code = `User <> WebApp: HTTPS
 WebApp > PaymentsAPI > Payments > Analytics
 `;
-        const ast = parseEraserDSL(code, "flow");
+        const ast = parseEraserDSL(code);
         // edges should be expanded from chains
         expect(ast.edges.length).toBeGreaterThanOrEqual(4);
         // find a specific edge
@@ -36,7 +36,7 @@ WebApp > PaymentsAPI > Payments > Analytics
 }
 users.accounts <> accounts.id
 `;
-        const ast = parseEraserDSL(code, "er");
+        const ast = parseEraserDSL(code);
         expect(ast.rootBlocks.length).toBeGreaterThanOrEqual(1);
         const usersNode = ast.rootBlocks.find(b => (b as any).id === "users") as any;
         expect(usersNode).toBeDefined();
@@ -56,7 +56,7 @@ users.accounts <> accounts.id
   CreditProvider [icon: money]
 }
 `;
-        const ast = parseEraserDSL(code, "flow");
+        const ast = parseEraserDSL(code);
         expect(ast.rootBlocks.length).toBe(1);
         const grp = ast.rootBlocks[0] as any;
         expect(grp.kind).toBe("group");

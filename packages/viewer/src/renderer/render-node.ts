@@ -3,7 +3,7 @@ import { IconRegistry } from './icons';
 import { resolveColor, ColorMode } from './colors';
 import { ViewerRenderOptions } from '@eraser/viewer';
 
-export function renderNode(node: NodeLayout, options: ViewerRenderOptions, metadata: any): SVGElement {
+export function renderNode(node: NodeLayout, options: ViewerRenderOptions, metadata: any, diagramHeight: number): SVGElement {
     const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     g.setAttribute('transform', `translate(${node.bounds.x}, ${node.bounds.y})`);
 
@@ -21,6 +21,24 @@ export function renderNode(node: NodeLayout, options: ViewerRenderOptions, metad
     // 2. Icon Logic
     const iconName = node.ast.attrs?.icon || '';
     const hasIcon = !!iconName && !!IconRegistry[iconName];
+
+    const isSequence = options.diagramType === 'sequence';
+
+    // -- Sequence Lifeline --
+    if (isSequence) {
+        const lifeline = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        const centerX = node.bounds.width / 2;
+        lifeline.setAttribute('x1', `${centerX}`);
+        lifeline.setAttribute('y1', `${node.bounds.height}`);
+        // Draw to bottom of diagram
+        lifeline.setAttribute('x2', `${centerX}`);
+        lifeline.setAttribute('y2', `${diagramHeight - node.bounds.y}`);
+        lifeline.setAttribute('stroke', colors.border);
+        lifeline.setAttribute('stroke-width', '2');
+        lifeline.setAttribute('stroke-dasharray', '6 4');
+        lifeline.setAttribute('opacity', '0.5');
+        g.appendChild(lifeline);
+    }
 
     // 3. Main Container (Card)
     const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');

@@ -1,7 +1,9 @@
 export type TokenType =
     | 'IDENT' | 'NUMBER' | 'STRING'
-    | 'LBRACE' | 'RBRACE' | 'LBRACK' | 'RBRACK' | 'COLON' | 'COMMA'
-    | 'GT' | 'LT' | 'GT_LT' | 'ARROW' | 'DASH' | 'NEWLINE' | 'EOF'
+    | 'LBRACE' | 'RBRACE' | 'LBRACK' | 'RBRACK'
+    | 'COLON' | 'COMMA' | 'PIPE' | 'AT'
+    | 'GT' | 'LT' | 'GT_LT' | 'ARROW' | 'DASH'
+    | 'NEWLINE' | 'EOF' | 'ADD'
     | 'OTHER';
 
 export interface Token {
