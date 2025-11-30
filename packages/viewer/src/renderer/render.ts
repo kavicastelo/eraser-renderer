@@ -3,8 +3,8 @@ import { renderNode } from './render-node';
 import { renderGroup } from './render-group';
 import { renderEdge } from './render-edge';
 import { DiagramAST, LayoutResult } from "@eraser/core";
-import {computeGraphLayout} from "../layout/dagre-layout";
-import {computeSequenceLayout} from "../layout/sequence-layout";
+import { computeGraphLayout } from "../layout/dagre-layout";
+import { computeSequenceLayout } from "../layout/sequence-layout";
 
 export function renderToSVGElement(
     ast: DiagramAST,
@@ -21,7 +21,7 @@ export function renderToSVGElement(
         options.diagramType = 'sequence'; // Pass down to node renderer
     } else {
         layout = computeGraphLayout(ast); // Using the Fixed Dagre engine
-        options.diagramType = 'graph';
+        options.diagramType = ast.diagramType;
     }
 
     const totalWidth = layout.width + padding * 2;

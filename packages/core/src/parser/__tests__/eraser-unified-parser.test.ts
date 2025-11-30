@@ -129,11 +129,6 @@ describe('Eraser Unified Parser Tests', () => {
             expect(node.fields?.length).toBe(2);
         });
 
-        // NOTE: This test is failing in your parser (Expected 2, Received 0).
-        // This suggests your parser is currently ignoring identifiers that are not
-        // part of an edge or don't have explicit attributes/fields defined.
-        // If this is not intended, you need to adjust your parser logic.
-        /*
         it('should parse a lone identifier as an entity', () => {
             const input = 'Customer\nAnotherNode';
             const ast = parseEraserDSL(input);
@@ -141,7 +136,6 @@ describe('Eraser Unified Parser Tests', () => {
             expect(asEntity(ast.rootBlocks[0]).id).toBe('Customer');
             expect(asEntity(ast.rootBlocks[1]).id).toBe('AnotherNode');
         });
-        */
     });
 
     describe('Group Parsing', () => {
@@ -276,11 +270,6 @@ describe('Eraser Unified Parser Tests', () => {
             });
         });
 
-        // NOTE: This test is currently failing in your parser (Received 0 edges).
-        // This indicates a bug where the parser fails to recognize the edge when
-        // node attributes are inline with the edge definition. You need to ensure
-        // the tokenizer/parser correctly handles the IDENTIFIER [ATTRS] -> IDENTIFIER [ATTRS] pattern.
-        /*
         it('should correctly ignore attributes in edge lines (bug fixed)', () => {
             const input = 'Frontend [color: blue] -> Backend [color: red]';
             const ast = parseEraserDSL(input);
@@ -291,7 +280,6 @@ describe('Eraser Unified Parser Tests', () => {
             // Check that the attributes created the nodes implicitly
             expect(ast.rootBlocks.length).toBe(2);
         });
-        */
     });
 
     describe('Complex Integration Test', () => {

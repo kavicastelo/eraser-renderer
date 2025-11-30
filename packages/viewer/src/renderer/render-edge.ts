@@ -44,8 +44,8 @@ export function renderEdge(edge: RoutedEdge, options: ViewerRenderOptions): SVGE
         const bgHeight = 20;
 
         const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-        bg.setAttribute('x', `${x - bgWidth/2}`);
-        bg.setAttribute('y', `${y - bgHeight/2}`);
+        bg.setAttribute('x', `${x - bgWidth / 2}`);
+        bg.setAttribute('y', `${y - bgHeight / 2}`);
         bg.setAttribute('width', `${bgWidth}`);
         bg.setAttribute('height', `${bgHeight}`);
         bg.setAttribute('rx', '4');
@@ -64,6 +64,18 @@ export function renderEdge(edge: RoutedEdge, options: ViewerRenderOptions): SVGE
         textGroup.appendChild(bg);
         textGroup.appendChild(text);
         group.appendChild(textGroup);
+    }
+
+    // Cardinality
+    if (edge.ast?.cardinality) {
+        const { from, to } = edge.ast.cardinality;
+
+        if (from && edge.points.length >= 2) {
+            renderCardinality(group, from, edge.points[0], edge.points[1], color, options.theme);
+        }
+        if (to && edge.points.length >= 2) {
+            renderCardinality(group, to, edge.points[edge.points.length - 1], edge.points[edge.points.length - 2], color, options.theme);
+        }
     }
 
     return group;
@@ -100,7 +112,7 @@ function getRoundedPath(points: Point[], radius: number): string {
     let path = `M ${points[0].x} ${points[0].y}`;
     for (let i = 0; i < points.length - 1; i++) {
         const pCurrent = points[i];
-        const pNext = points[i+1];
+        const pNext = points[i + 1];
 
         // If it's a long segment, draw line. If it's a bend...
         // Actually, easiest aesthetic smoothing:
@@ -133,15 +145,15 @@ function generateRoundedCornerPath(points: Point[], r: number): string {
         const v1 = { x: prev.x - curr.x, y: prev.y - curr.y };
         const v2 = { x: next.x - curr.x, y: next.y - curr.y };
 
-        const len1 = Math.sqrt(v1.x*v1.x + v1.y*v1.y);
-        const len2 = Math.sqrt(v2.x*v2.x + v2.y*v2.y);
+        const len1 = Math.sqrt(v1.x * v1.x + v1.y * v1.y);
+        const len2 = Math.sqrt(v2.x * v2.x + v2.y * v2.y);
 
         // Clamp radius to not exceed half the segment length
-        const effectiveR = Math.min(r, len1/2, len2/2);
+        const effectiveR = Math.min(r, len1 / 2, len2 / 2);
 
         // Normalize and scale
-        const off1 = { x: curr.x + (v1.x/len1) * effectiveR, y: curr.y + (v1.y/len1) * effectiveR };
-        const off2 = { x: curr.x + (v2.x/len2) * effectiveR, y: curr.y + (v2.y/len2) * effectiveR };
+        const off1 = { x: curr.x + (v1.x / len1) * effectiveR, y: curr.y + (v1.y / len1) * effectiveR };
+        const off2 = { x: curr.x + (v2.x / len2) * effectiveR, y: curr.y + (v2.y / len2) * effectiveR };
 
         d += ` L ${off1.x} ${off1.y}`;
         d += ` Q ${curr.x} ${curr.y} ${off2.x} ${off2.y}`;
@@ -149,4 +161,52 @@ function generateRoundedCornerPath(points: Point[], r: number): string {
 
     d += ` L ${points[points.length - 1].x} ${points[points.length - 1].y}`;
     return d;
+}
+
+function renderCardinality(
+    group: SVGElement,
+    text: string,
+    pAnchor: Point,
+    pDirection: Point,
+    color: string,
+    theme?: string
+) {
+    // Calculate offset
+    const dx = pDirection.x - pAnchor.x;
+    const dy = pDirection.y - pAnchor.y;
+    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+
+    // Move 15px away from anchor along the line
+    const offset = 15;
+    const nx = dx / len;
+    const ny = dy / len;
+
+    const x = pAnchor.x + nx * offset;
+    const y = pAnchor.y + ny * offset;
+
+    // Background
+    const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    const width = text.length * 6 + 4;
+    const height = 14;
+    bg.setAttribute('x', `${x - width / 2}`);
+    bg.setAttribute('y', `${y - height / 2}`);
+    bg.setAttribute('width', `${width}`);
+    bg.setAttribute('height', `${height}`);
+    bg.setAttribute('rx', '2');
+    bg.setAttribute('fill', theme === 'dark' ? '#1E293B' : '#FFFFFF');
+    bg.setAttribute('opacity', '0.8');
+
+    // Text
+    const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    t.textContent = text;
+    t.setAttribute('x', x.toString());
+    t.setAttribute('y', y.toString());
+    t.setAttribute('fill', color);
+    t.setAttribute('font-size', '10');
+    t.setAttribute('font-family', 'ui-monospace, monospace');
+    t.setAttribute('text-anchor', 'middle');
+    t.setAttribute('dominant-baseline', 'middle');
+
+    group.appendChild(bg);
+    group.appendChild(t);
 }
