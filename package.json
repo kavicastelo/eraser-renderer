@@ -12,7 +12,8 @@
     "copy:types": "sh ./copy-types.sh",
     "build:diagram": "cd apps && pnpm ng build diagram-viewer",
     "build:playground": "cd apps && pnpm ng build playground",
-    "build": "pnpm build:packages:core && pnpm build:packages:viewer && pnpm copy:types && pnpm build:diagram && pnpm build:playground"
+    "build": "pnpm build:packages:core && pnpm build:packages:viewer && pnpm copy:types && pnpm build:diagram && pnpm build:playground",
+    "build:local": "pnpm build:packages:core && pnpm build:packages:viewer && pnpm build:diagram && pnpm build:playground"
   },
   "devDependencies": {
     "@types/codemirror": "^5.60.17",

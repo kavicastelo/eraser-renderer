@@ -1,4 +1,4 @@
-import { DiagramAST, LayoutResult, NodeLayout, RoutedEdge } from '@eraser/core';
+import { DiagramAST, EdgeNode, LayoutResult, NodeLayout, RoutedEdge } from '@eraser/core';
 
 export function computeSequenceLayout(ast: DiagramAST): LayoutResult {
     const nodes: Record<string, NodeLayout> = {};
@@ -31,11 +31,11 @@ export function computeSequenceLayout(ast: DiagramAST): LayoutResult {
     uniqueParticipants.forEach(id => {
         // Find AST node
         const findNode = (blocks: any[]): any => {
-            for(const b of blocks) {
-                if(b.kind === 'entity' && b.id === id) return b;
-                if(b.kind === 'group') {
+            for (const b of blocks) {
+                if (b.kind === 'entity' && b.id === id) return b;
+                if (b.kind === 'group') {
                     const found = findNode(b.children);
-                    if(found) return found;
+                    if (found) return found;
                 }
             }
         };
@@ -54,7 +54,7 @@ export function computeSequenceLayout(ast: DiagramAST): LayoutResult {
     // 3. Position Edges (The Rows)
     let currentY = START_Y + HEADER_HEIGHT + 40;
 
-    ast.edges.forEach((edge, i) => {
+    ast.edges.forEach((edge: EdgeNode, i: number) => {
         const sourceNode = nodes[edge.from];
         const targetNode = nodes[edge.to];
 

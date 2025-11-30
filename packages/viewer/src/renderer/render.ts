@@ -2,7 +2,7 @@ import { ViewerRenderResult, ViewerRenderOptions } from '../types/viewer-types';
 import { renderNode } from './render-node';
 import { renderGroup } from './render-group';
 import { renderEdge } from './render-edge';
-import { DiagramAST, LayoutResult } from "@eraser/core";
+import { DiagramAST, LayoutResult, RoutedEdge } from "@eraser/core";
 import { computeGraphLayout } from "../layout/dagre-layout";
 import { computeSequenceLayout } from "../layout/sequence-layout";
 
@@ -75,12 +75,12 @@ export function renderToSVGElement(
             content.appendChild(renderNode(node, options, ast.metadata, layout.height));
         });
         // Draw Edges (on top of lifelines)
-        layout.edges.forEach(edge => {
+        layout.edges.forEach((edge: RoutedEdge) => {
             content.appendChild(renderEdge(edge, options));
         });
     } else {
         // Standard Graph Order
-        layout.edges.forEach(e => content.appendChild(renderEdge(e, options)));
+        layout.edges.forEach((e: RoutedEdge) => content.appendChild(renderEdge(e, options)));
         Object.values(layout.nodes).forEach(n => content.appendChild(renderNode(n, options, ast.metadata, 0)));
     }
 

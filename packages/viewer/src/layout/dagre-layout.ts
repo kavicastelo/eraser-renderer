@@ -8,9 +8,11 @@ import {
     GroupLayout,
     RoutedEdge,
     Rect,
-    LayoutResult
+    LayoutResult,
+    EdgeNode,
+    FieldDef
 } from '@eraser/core';
-import {measureText} from "./text-measure";
+import { measureText } from "./text-measure";
 
 /**
  * High-quality layout using Dagre (same as Mermaid)
@@ -45,9 +47,9 @@ export function computeDiagramLayout(ast: DiagramAST): LayoutResult {
     });
 
     // 3. Edges
-    ast.edges.forEach((edge, i) => {
+    ast.edges.forEach((edge: EdgeNode, i: number) => {
         // Validation: Ensure nodes exist before adding edges to avoid Dagre crashes
-        if(g.hasNode(edge.from) && g.hasNode(edge.to)) {
+        if (g.hasNode(edge.from) && g.hasNode(edge.to)) {
             g.setEdge(edge.from, edge.to, {
                 id: `edge_${i}`,
                 ast: edge,
@@ -144,7 +146,7 @@ export function computeGraphLayout(ast: DiagramAST): LayoutResult {
     ast.rootBlocks.forEach(visit);
 
     // 2. Add Edges (With ID Resolution)
-    ast.edges.forEach((edge, i) => {
+    ast.edges.forEach((edge: EdgeNode, i: number) => {
         const u = resolveNodeId(edge.from);
         const v = resolveNodeId(edge.to);
 
@@ -168,7 +170,7 @@ export function computeGraphLayout(ast: DiagramAST): LayoutResult {
     g.nodes().forEach(id => {
         const n: any = g.node(id);
         if (!n) return;
-        const bounds = { x: n.x - n.width/2, y: n.y - n.height/2, width: n.width, height: n.height };
+        const bounds = { x: n.x - n.width / 2, y: n.y - n.height / 2, width: n.width, height: n.height };
 
         if (n.cluster) {
             groups[id] = { name: id, bounds, ast: n.ast, children: g.children(id) };
@@ -208,7 +210,7 @@ function calculateNodeSize(node: ASTNode) {
 
     if (node.fields) {
         height += node.fields.length * 24 + 10;
-        node.fields.forEach(f => {
+        node.fields.forEach((f: FieldDef) => {
             const fw = measureText(f.raw || f.name, '12px monospace').width;
             if (fw + 40 > width) width = fw + 40;
         });
@@ -236,7 +238,7 @@ function calculateNodeDimensions(node: ASTNode) {
 
     if (node.fields && node.fields.length > 0) {
         let maxFieldWidth = 0;
-        node.fields.forEach(f => {
+        node.fields.forEach((f: FieldDef) => {
             const txt = `${f.name} ${f.type || ''}`;
             const w = measureText(txt, monoFont).width;
             maxFieldWidth = Math.max(maxFieldWidth, w);
