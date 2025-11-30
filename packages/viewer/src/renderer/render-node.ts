@@ -1,4 +1,4 @@
-import { NodeLayout } from '@eraser/core';
+import { FieldDef, NodeLayout } from '@eraser/core';
 import { IconRegistry } from './icons';
 import { resolveColor, ColorMode } from './colors';
 import { ViewerRenderOptions } from '@eraser/viewer';
@@ -160,7 +160,7 @@ function renderEntityWithFields(
         const fieldGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
         fieldGroup.setAttribute('transform', `translate(0, ${headerHeight})`);
 
-        node.ast.fields.forEach((f, i) => {
+        node.ast.fields.forEach((f: FieldDef, i: number) => {
             const rowY = 24 + (i * 24); // 24px per row
 
             const fieldText = document.createElementNS('http://www.w3.org/2000/svg', 'text');

@@ -6,11 +6,11 @@ import {
     NodeLayout,
     GroupLayout,
     RoutedEdge,
+    BlockNode,
+    computeNodeLayout,
+    computeGroupLayout,
+    computeEdgeRouting
 } from '@eraser/core';
-
-import { computeNodeLayout } from '@eraser/core/dist/layout/node-layout';
-import { computeGroupLayout } from '@eraser/core/dist/layout/group-layout';
-import { computeEdgeRouting } from '@eraser/core/dist/layout/edge-routing';
 
 export interface LayoutResult {
     nodes: Record<string, NodeLayout>;
@@ -21,15 +21,15 @@ export interface LayoutResult {
 }
 
 export function computeLayout(ast: DiagramAST): LayoutResult {
-    const astNodes = ast.rootBlocks.filter(b => b.kind === 'entity') as ASTNode[];
-    const astGroups = ast.rootBlocks.filter(b => b.kind === 'group') as ASTGroup[];
+    const astNodes = ast.rootBlocks.filter((b: BlockNode) => b.kind === 'entity') as ASTNode[];
+    const astGroups = ast.rootBlocks.filter((b: BlockNode) => b.kind === 'group') as ASTGroup[];
     const astEdges = ast.edges as ASTEdge[];
 
     const nodes = computeNodeLayout(astNodes);
     const groups = computeGroupLayout(astGroups, nodes);
     const edges = computeEdgeRouting(astEdges, groups, nodes);
 
-    const allBounds = Object.values(nodes).map(n => n.bounds);
+    const allBounds = Object.values(nodes).map((n: NodeLayout) => n.bounds);
 
     const width = Math.max(...allBounds.map(b => b.x + b.width), 1000);
     const height = Math.max(...allBounds.map(b => b.y + b.height), 600);
