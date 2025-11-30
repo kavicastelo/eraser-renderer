@@ -1,7 +1,7 @@
 # Eraser Renderer – Open Source Diagram Viewer & Editor  
 **Beautiful architecture diagrams, flowcharts, and ER diagrams from simple text**
 
-Live Demo: https://kavicastelo-eraser-renderer.vercel.app  
+Live Demo: [Demo](https://eraser-renderer-apps.vercel.app/) 
 (Playground included – just type!)
 
 ```text
