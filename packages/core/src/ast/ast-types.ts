@@ -1,4 +1,4 @@
-export type DiagramType = 'flow' | 'cloud' | 'er' | 'sequence' | 'bpmn' | 'class' | 'graph' | 'unknown';
+export type DiagramType = 'flow' | 'cloud' | 'er' | 'sequence' | 'bpmn' | 'class' | 'graph' | 'architecture' | 'unknown';
 
 export interface DiagramAST {
     diagramType: DiagramType;
@@ -31,6 +31,8 @@ export interface FieldDef {
     name: string;
     type?: string;
     constraints?: string[];
+    memberType?: 'field' | 'method';
+    visibility?: 'public' | 'private' | 'protected' | 'package';
     raw?: string;
 }
 
@@ -42,6 +44,10 @@ export interface EdgeNode {
     to: string;
     kind: EdgeKind;
     label?: string;
+    cardinality?: {
+        from?: string; // e.g. "1", "0..1", "*"
+        to?: string;   // e.g. "1", "0..1", "*"
+    };
     raw?: string;
 }
 

@@ -23,6 +23,11 @@ export function renderNode(node: NodeLayout, options: ViewerRenderOptions, metad
     const hasIcon = !!iconName && !!IconRegistry[iconName];
 
     const isSequence = options.diagramType === 'sequence';
+    const isBPMN = options.diagramType === 'bpmn';
+
+    if (isBPMN) {
+        return renderBPMNNode(node, options, colors);
+    }
 
     // -- Sequence Lifeline --
     if (isSequence) {
@@ -165,14 +170,24 @@ function renderEntityWithFields(
             fieldText.setAttribute('font-size', '12');
             fieldText.setAttribute('fill', colors.fg); // Or a slightly lighter shade
 
+            // Visibility
+            let prefix = '';
+            if (f.visibility === 'public') prefix = '+ ';
+            else if (f.visibility === 'private') prefix = '- ';
+            else if (f.visibility === 'protected') prefix = '# ';
+            else if (f.visibility === 'package') prefix = '~ ';
+
             // Name
             const nameSpan = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
-            nameSpan.textContent = f.name;
+            nameSpan.textContent = prefix + f.name;
             nameSpan.setAttribute('font-weight', '600');
+            if (f.memberType === 'method') {
+                nameSpan.textContent += '()'; // Simple addition if parens missing, though parser usually keeps them
+            }
 
             // Type
             const typeSpan = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
-            typeSpan.textContent = f.type ? ` ${f.type}` : '';
+            typeSpan.textContent = f.type ? `: ${f.type}` : '';
             typeSpan.setAttribute('opacity', '0.7');
 
             fieldText.appendChild(nameSpan);
@@ -221,4 +236,58 @@ function renderFloatingIcon(
     iconGroup.appendChild(box);
     iconGroup.appendChild(icon);
     parent.appendChild(iconGroup);
+}
+
+function renderBPMNNode(node: NodeLayout, options: ViewerRenderOptions, colors: any): SVGElement {
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.setAttribute('transform', `translate(${node.bounds.x}, ${node.bounds.y})`);
+
+    const type = node.ast.attrs.type || 'task';
+    const { width, height } = node.bounds;
+
+    if (type === 'event' || type === 'start' || type === 'end') {
+        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        const r = Math.min(width, height) / 2;
+        circle.setAttribute('cx', (width / 2).toString());
+        circle.setAttribute('cy', (height / 2).toString());
+        circle.setAttribute('r', r.toString());
+        circle.setAttribute('fill', colors.bg);
+        circle.setAttribute('stroke', colors.border);
+        circle.setAttribute('stroke-width', type === 'end' ? '4' : '2');
+        g.appendChild(circle);
+    } else if (type === 'gateway') {
+        const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        // Diamond shape
+        const points = `${width / 2},0 ${width},${height / 2} ${width / 2},${height} 0,${height / 2}`;
+        polygon.setAttribute('points', points);
+        polygon.setAttribute('fill', colors.bg);
+        polygon.setAttribute('stroke', colors.border);
+        polygon.setAttribute('stroke-width', '2');
+        g.appendChild(polygon);
+    } else {
+        // Task (Rounded Rect)
+        const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        rect.setAttribute('width', width.toString());
+        rect.setAttribute('height', height.toString());
+        rect.setAttribute('rx', '8');
+        rect.setAttribute('fill', colors.bg);
+        rect.setAttribute('stroke', colors.border);
+        rect.setAttribute('stroke-width', '2');
+        g.appendChild(rect);
+    }
+
+    // Label
+    const label = node.ast.attrs?.label || node.ast.id;
+    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    text.textContent = label;
+    text.setAttribute('x', (width / 2).toString());
+    text.setAttribute('y', (height / 2).toString());
+    text.setAttribute('text-anchor', 'middle');
+    text.setAttribute('dominant-baseline', 'middle');
+    text.setAttribute('font-family', 'ui-sans-serif, system-ui, sans-serif');
+    text.setAttribute('font-size', '12');
+    text.setAttribute('fill', colors.fg);
+    g.appendChild(text);
+
+    return g;
 }
