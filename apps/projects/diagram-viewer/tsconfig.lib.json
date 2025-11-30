@@ -7,7 +7,16 @@
     "declaration": true,
     "declarationMap": true,
     "inlineSources": true,
-    "types": []
+    "types": [],
+    "baseUrl": "./",
+    "paths": {
+      "@eraser/core": [
+        "../../../packages/core/dist"
+      ],
+      "@eraser/viewer": [
+        "../../../packages/viewer/dist"
+      ]
+    }
   },
   "exclude": [
     "**/*.spec.ts"
