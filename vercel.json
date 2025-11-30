@@ -1,6 +1,11 @@
 {
     "version": 2,
-    "rootDirectory": ".",
     "buildCommand": "pnpm build",
-    "outputDirectory": "apps/dist/playground/browser"
+    "outputDirectory": "apps/dist/playground/browser",
+    "routes": [
+        {
+            "src": "/(.*)",
+            "dest": "/index.html"
+        }
+    ]
 }
