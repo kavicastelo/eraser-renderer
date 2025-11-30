@@ -5,9 +5,12 @@
   "scripts": {
     "start": "concurrently -n PACKAGES,ANGULAR \"pnpm dev\" \"cd apps/playground && pnpm ng serve\"",
     "test": "pnpm -r --filter \"./packages/*\" run test",
-    "build": "pnpm -r --filter \"./packages/*\" run build",
     "watch": "pnpm -r --parallel --filter \"./packages/*\" run watch",
-    "dev": "pnpm watch"
+    "dev": "pnpm watch",
+    "build:packages": "pnpm -r --filter \"./packages/*\" run build",
+    "build:diagram": "cd apps && pnpm ng build diagram-viewer",
+    "build:playground": "cd apps && pnpm ng build playground",
+    "build": "pnpm build:packages && pnpm build:diagram && pnpm build:playground"
   },
   "devDependencies": {
     "@types/codemirror": "^5.60.17",
