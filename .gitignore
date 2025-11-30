@@ -8,3 +8,4 @@ packages/core/dist
 /apps/playground/.vscode/
 /apps/playground/node_modules/
 /apps/.vscode/
+*.tsbuildinfo

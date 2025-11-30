@@ -7,10 +7,12 @@
     "test": "pnpm -r --filter \"./packages/*\" run test",
     "watch": "pnpm -r --parallel --filter \"./packages/*\" run watch",
     "dev": "pnpm watch",
-    "build:packages": "pnpm -r --filter \"./packages/*\" run build",
+    "build:packages:core": "pnpm --filter ./packages/core build",
+    "build:packages:viewer": "pnpm --filter ./packages/viewer build",
+    "copy:types": "sh ./copy-types.sh",
     "build:diagram": "cd apps && pnpm ng build diagram-viewer",
     "build:playground": "cd apps && pnpm ng build playground",
-    "build": "pnpm build:packages && pnpm build:diagram && pnpm build:playground"
+    "build": "pnpm build:packages:core && pnpm build:packages:viewer && pnpm copy:types && pnpm build:diagram && pnpm build:playground"
   },
   "devDependencies": {
     "@types/codemirror": "^5.60.17",

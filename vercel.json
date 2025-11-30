@@ -1,11 +1,7 @@
 {
     "version": 2,
-    "builds": [
-        {
-            "src": "apps/dist/playground/browser/**",
-            "use": "@vercel/static"
-        }
-    ],
+    "buildCommand": "pnpm build",
+    "outputDirectory": "apps/dist/playground/browser",
     "routes": [
         {
             "src": "/(.*)",
